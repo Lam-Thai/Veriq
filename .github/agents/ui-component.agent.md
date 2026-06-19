@@ -12,6 +12,16 @@ Building or modifying any React component, page layout, form, or visual interfac
 | `#file:.github/skills/typescript.skill.md` | Prop types, discriminated unions for state |
 | `#file:.github/skills/nextjs.skill.md` | RSC vs client component decision, Suspense |
 | `#file:.github/skills/design-system.skill.md` | Tokens, typography, spacing, accessible patterns |
+| `#file:.github/skills/engineering-standards.skill.md` | Security/scalability/readability bar — applies to all output |
+
+---
+
+## Before You Start
+Only ask if the answer isn't already clear from the request or the existing codebase — don't
+ask what you can reasonably infer.
+- Server or Client component — does this actually need interactivity?
+- Is there an existing component/pattern in the codebase this should match?
+- Any breakpoint priorities beyond the standard 375px mobile check?
 
 ---
 
@@ -193,3 +203,4 @@ export function InvoiceForm() {
 - [ ] No hardcoded hex colors — CSS vars or Tailwind tokens only
 - [ ] Mobile layout works at 375px
 - [ ] Forms: `noValidate`, inline errors, disabled while submitting
+- [ ] Passes `engineering-standards.skill.md` Definition of Done

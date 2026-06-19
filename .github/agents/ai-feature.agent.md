@@ -21,9 +21,23 @@ Integrating LLM capabilities into the product. Decide the split before writing c
 | `#file:.github/skills/typescript.skill.md` | Types for streaming, response shapes |
 | `#file:.github/skills/nextjs.skill.md` | Streaming routes, Server Actions, SSE |
 | `#file:.github/skills/ai-integration.skill.md` | SDK setup, prompt patterns, cost monitoring |
+| `#file:.github/skills/python.skill.md` | Async patterns for the FastAPI pipeline side |
+| `#file:.github/skills/sqlalchemy.skill.md` | DB access inside background pipeline tasks |
 | `#file:.github/skills/api-contracts.skill.md` | Internal service contracts between Next.js ↔ FastAPI |
 | `#file:.github/skills/security.skill.md` | Input sanitization, key isolation, rate limiting |
 | `#file:.github/skills/error-handling.skill.md` | AI error handling, timeouts, fallbacks |
+| `#file:.github/skills/engineering-standards.skill.md` | Security/scalability/readability bar — applies to all output |
+
+---
+
+## Before You Start
+Only ask if the answer isn't already clear from the request or the existing codebase — don't
+ask what you can reasonably infer.
+- Streaming UI or processing pipeline? (see decision table above)
+- Expected output shape: free text, or structured (zod/pydantic schema)?
+- Does this feature need a tighter rate limit than the project default?
+- Is there an existing prompt file in `lib/prompts/` for a similar feature whose tone/format
+  this should match?
 
 ---
 
@@ -157,3 +171,4 @@ Output: { "vendor": "Acme Corp", "amount": 1200, "dueDate": "2025-01-15", "invoi
 - [ ] `aria-live` on streamed content container
 - [ ] Token usage logged for cost monitoring
 - [ ] Prompt file versioned with comment
+- [ ] Passes `engineering-standards.skill.md` Definition of Done

@@ -15,8 +15,20 @@ session token passed in the `Authorization` header from Next.js.
 |---|---|
 | `#file:.github/skills/typescript.skill.md` | Types, session extension, role enums |
 | `#file:.github/skills/nextjs.skill.md` | Middleware, App Router, Server Actions |
+| `#file:.github/skills/prisma.skill.md` | Ownership-scoped queries, adapter model |
+| `#file:.github/skills/api-contracts.skill.md` | 404-not-403 envelope for ownership failures |
 | `#file:.github/skills/security.skill.md` | Cookie flags, token expiry, brute force protection |
 | `#file:.github/skills/error-handling.skill.md` | Auth failure handling, structured logging |
+| `#file:.github/skills/engineering-standards.skill.md` | Security/scalability/readability bar — applies to all output |
+
+---
+
+## Before You Start
+Only ask if the answer isn't already clear from the request or the existing codebase — don't
+ask what you can reasonably infer.
+- OAuth provider(s), credentials login, or both?
+- What roles does the app need, beyond any `Role` enum that already exists in the schema?
+- Does this touch an existing session/JWT shape, or is it new?
 
 ---
 
@@ -167,3 +179,4 @@ declare module 'next-auth/jwt' {
 - [ ] Rate limit on credentials login endpoint
 - [ ] Service tokens short-lived (<10min) for FastAPI calls
 - [ ] Re-auth required for destructive account actions
+- [ ] Passes `engineering-standards.skill.md` Definition of Done

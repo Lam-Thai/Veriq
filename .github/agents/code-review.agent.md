@@ -12,9 +12,22 @@ Apply to both TypeScript and Python files.
 |---|---|
 | `#file:.github/skills/typescript.skill.md` | TS-specific antipatterns, type safety |
 | `#file:.github/skills/python.skill.md` | Python-specific antipatterns, async correctness |
+| `#file:.github/skills/prisma.skill.md` | Correct Prisma patterns to check DB code against |
+| `#file:.github/skills/sqlalchemy.skill.md` | Correct SQLAlchemy patterns to check DB code against |
+| `#file:.github/skills/postgresql.skill.md` | Indexing, N+1, pagination correctness |
 | `#file:.github/skills/security.skill.md` | Security issues across both runtimes |
 | `#file:.github/skills/api-contracts.skill.md` | Response consistency, status code correctness |
 | `#file:.github/skills/error-handling.skill.md` | Unhandled errors, missing logging |
+| `#file:.github/skills/engineering-standards.skill.md` | Security/scalability/readability bar the diff is judged against |
+
+---
+
+## Before You Start
+Only ask if the answer isn't already clear from the request or the existing codebase — don't
+ask what you can reasonably infer.
+- Reviewing a specific diff/PR, or auditing an existing file/module end-to-end?
+- Any specific concern driving this review (perf regression, security, recent incident)?
+- Include Nits in the output, or just Blockers/Suggestions?
 
 ---
 

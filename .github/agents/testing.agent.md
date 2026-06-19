@@ -11,7 +11,18 @@ Writing unit tests, integration tests, or E2E tests for either runtime.
 |---|---|
 | `#file:.github/skills/typescript.skill.md` | TypeScript test typing, zod schema testing |
 | `#file:.github/skills/python.skill.md` | pytest patterns, fixtures, async testing |
+| `#file:.github/skills/api-contracts.skill.md` | Response envelope shape assertions (`data`/`error`) |
 | `#file:.github/skills/error-handling.skill.md` | Testing error paths, failure modes |
+| `#file:.github/skills/engineering-standards.skill.md` | Security/scalability/readability bar — applies to all output |
+
+---
+
+## Before You Start
+Only ask if the answer isn't already clear from the request or the existing codebase — don't
+ask what you can reasonably infer.
+- Unit, integration, E2E — or a mix, for this piece of work?
+- Existing test factories / test DB setup to reuse, or does one need to be created first?
+- Core paths only (happy / auth / validation / 404), or fuller edge-case coverage expected?
 
 ---
 
@@ -199,3 +210,4 @@ test('user creates and sends an invoice', async ({ page }) => {
 - [ ] Edge cases: empty arrays, zero values, boundary values
 - [ ] Tests pass in isolation (no shared state leaking)
 - [ ] Test DB isolated from dev DB
+- [ ] Passes `engineering-standards.skill.md` Definition of Done

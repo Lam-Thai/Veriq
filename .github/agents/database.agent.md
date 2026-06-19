@@ -19,6 +19,18 @@ tools competing on the same tables.
 | `#file:.github/skills/sqlalchemy.skill.md` | Async ORM, SQLAlchemy models mirroring Prisma schema |
 | `#file:.github/skills/typescript.skill.md` | Typed Prisma queries, inferred return types |
 | `#file:.github/skills/python.skill.md` | SQLAlchemy model definitions, async session |
+| `#file:.github/skills/engineering-standards.skill.md` | Security/scalability/readability bar — applies to all output |
+
+---
+
+## Before You Start
+Only ask if the answer isn't already clear from the request or the existing codebase — don't
+ask what you can reasonably infer.
+- New table, or a change to an existing one?
+- Relationship shape (1:1, 1:many, many:many) and which side owns the foreign key?
+- Expected row count over the next 1–2 years — affects whether to plan for cursor
+  pagination/partial indexes now versus later?
+- Does FastAPI need to read this table too (mirror SQLAlchemy model required)?
 
 ---
 
@@ -165,3 +177,4 @@ await db.commit()
 - [ ] Prisma: `select` on all queries
 - [ ] SQLAlchemy model table names match Prisma (PascalCase)
 - [ ] No schema changes in Alembic competing with Prisma
+- [ ] Passes `engineering-standards.skill.md` Definition of Done

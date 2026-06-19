@@ -15,6 +15,17 @@ file uploads, or user data goes to production.
 | `#file:.github/skills/api-contracts.skill.md` | Response shapes, status code correctness |
 | `#file:.github/skills/typescript.skill.md` | TS-specific vulnerabilities (type assertions, any) |
 | `#file:.github/skills/python.skill.md` | Python-specific vulnerabilities (deserialization, injection) |
+| `#file:.github/skills/error-handling.skill.md` | Logging/redaction correctness for A09 findings |
+| `#file:.github/skills/engineering-standards.skill.md` | Security/scalability/readability bar — applies to all output |
+
+---
+
+## Before You Start
+Only ask if the answer isn't already clear from the request or the existing codebase — don't
+ask what you can reasonably infer.
+- Full OWASP pass, or targeted (e.g. just auth, just file upload)?
+- Pre-merge gate on new code, or a scheduled audit of something already shipped?
+- Any compliance requirement in play (data residency, SOC2, etc.) that raises the bar?
 
 ---
 

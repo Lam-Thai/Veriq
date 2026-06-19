@@ -16,6 +16,16 @@ Never use Alembic on tables Prisma manages.
 | `#file:.github/skills/postgresql.skill.md` | Safe DDL patterns, index strategies, constraint types |
 | `#file:.github/skills/prisma.skill.md` | Migration commands, schema conventions |
 | `#file:.github/skills/sqlalchemy.skill.md` | Updating SQLAlchemy mirror models after schema change |
+| `#file:.github/skills/engineering-standards.skill.md` | Security/scalability/readability bar — applies to all output |
+
+---
+
+## Before You Start
+Only ask if the answer isn't already clear from the request or the existing codebase — don't
+ask what you can reasonably infer.
+- Additive or destructive change? (see classification below)
+- Is the table already populated in production, or still pre-launch (no live data risk)?
+- Does any FastAPI service read this table — does its SQLAlchemy mirror model need updating too?
 
 ---
 
@@ -159,3 +169,4 @@ Data loss on rollback: NO
 - [ ] Index creation uses CONCURRENTLY (Prisma handles this via `@@index`)
 - [ ] No Alembic migrations competing with Prisma on shared tables
 - [ ] `prisma migrate deploy` used in CI/CD — not `migrate dev`
+- [ ] Passes `engineering-standards.skill.md` Definition of Done

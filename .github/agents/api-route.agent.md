@@ -19,9 +19,21 @@ coupled to the frontend: resource creation, retrieval, update, delete.
 |---|---|
 | `#file:.github/skills/typescript.skill.md` | Strict types, zod inference, branded IDs |
 | `#file:.github/skills/nextjs.skill.md` | App Router structure, Server Actions, middleware |
+| `#file:.github/skills/prisma.skill.md` | Query patterns, `select`, transactions, soft delete |
 | `#file:.github/skills/api-contracts.skill.md` | Response shapes, status codes, error envelope |
 | `#file:.github/skills/security.skill.md` | Input validation, rate limiting, security headers |
 | `#file:.github/skills/error-handling.skill.md` | Result type, error classes, structured logging |
+| `#file:.github/skills/engineering-standards.skill.md` | Security/scalability/readability bar — applies to all output |
+
+---
+
+## Before You Start
+Only ask if the answer isn't already clear from the request or the existing codebase — don't
+ask what you can reasonably infer.
+- Resource name, HTTP methods needed, and auth level (public / authed / role-gated)?
+- Will this become a list endpoint? If so, expected table size — offset pagination is fine,
+  or does it need cursor pagination from day one?
+- Any existing route in the codebase with a similar shape to mirror conventions from?
 
 ---
 
@@ -102,3 +114,4 @@ export async function POST(req: NextRequest) {
 - [ ] `select` on all Prisma queries
 - [ ] No internal error details in response body
 - [ ] Correct HTTP status codes (201 create, 204 delete, 422 validation)
+- [ ] Passes `engineering-standards.skill.md` Definition of Done

@@ -27,6 +27,16 @@ Routes that belong in FastAPI — not in Next.js API routes:
 | `#file:.github/skills/security.skill.md` | Service token verification, rate limiting, CORS |
 | `#file:.github/skills/error-handling.skill.md` | Exception hierarchy, structured logging |
 | `#file:.github/skills/postgresql.skill.md` | Query patterns, indexes, pagination |
+| `#file:.github/skills/engineering-standards.skill.md` | Security/scalability/readability bar — applies to all output |
+
+---
+
+## Before You Start
+Only ask if the answer isn't already clear from the request or the existing codebase — don't
+ask what you can reasonably infer.
+- Confirmed this belongs in FastAPI, not Next.js? (see decision table above)
+- Synchronous response, or background job returning `202`?
+- File involved — what types are accepted and what's the max size?
 
 ---
 
@@ -48,7 +58,7 @@ app/
     files.py          ← file upload/parsing routes
   schemas/
     invoice.py        ← Pydantic request + response models
-    common.py         ← DataResponse, ErrorResponse envelopes
+    common.py          ← DataResponse, ErrorResponse envelopes
   services/
     invoice.py        ← business logic (no FastAPI imports here)
   models/
@@ -275,3 +285,4 @@ class ErrorResponse(BaseModel):
 - [ ] Response matches `{ data }` / `{ error }` envelope
 - [ ] CORS explicit origins — no wildcard
 - [ ] No secrets in logs — PII stripped from structlog output
+- [ ] Passes `engineering-standards.skill.md` Definition of Done
