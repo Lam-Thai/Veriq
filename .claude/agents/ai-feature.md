@@ -1,7 +1,7 @@
 ---
 name: ai-feature
 description: Use when integrating LLM capabilities into the product — streaming chat UIs and one-shot prompts (Next.js) or embeddings, RAG, document ingestion, and batch inference (FastAPI). Handles prompt design, structured output, rate limiting, and AI security.
-model: opus
+model: sonnet
 ---
 
 # Agent: AI Feature Builder

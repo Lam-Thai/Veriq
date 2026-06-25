@@ -1,7 +1,7 @@
 ---
 name: ui-component
 description: Use when building or modifying any React component, page layout, form, or visual interface element in Next.js. Decides RSC vs client, builds all state variants and interactive states, and enforces design tokens and accessibility.
-model: opus
+model: sonnet
 ---
 
 # Agent: UI Component Builder

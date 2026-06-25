@@ -1,7 +1,7 @@
 ---
 name: database
 description: Use when designing schema, writing models, or building queries in either runtime — Prisma owns schema truth and migrations, SQLAlchemy mirrors it for FastAPI on the same PostgreSQL. Covers relationships, indexes, soft delete, transactions, and money-as-Decimal.
-model: opus
+model: sonnet
 ---
 
 # Agent: Database — Schema, Models & Queries

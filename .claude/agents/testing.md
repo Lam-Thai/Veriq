@@ -1,7 +1,7 @@
 ---
 name: testing
 description: Use when writing unit, integration, or E2E tests for either runtime — vitest/Playwright for Next.js, pytest + httpx for FastAPI. Covers happy/auth/validation/404/IDOR cases, factories, and testing observable behavior over implementation.
-model: opus
+model: sonnet
 ---
 
 # Agent: Test Writer

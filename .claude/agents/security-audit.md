@@ -1,7 +1,7 @@
 ---
 name: security-audit
 description: Use before merging or shipping anything touching auth, payments, file uploads, or user data — runs a full OWASP pass across Next.js and FastAPI, files findings by severity (Critical/High/Medium/Low), and provides corrected code for every Critical and High.
-model: opus
+model: sonnet
 ---
 
 # Agent: Security Auditor

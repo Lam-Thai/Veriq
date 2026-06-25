@@ -1,7 +1,7 @@
 ---
 name: fastapi-route
 description: Use for FastAPI routes that don't belong in Next.js — file parsing (PDF/CSV/images), embeddings/vector search, RAG pipelines, document ingestion, batch inference, heavy aggregation, and any work over ~500ms. Covers service-token auth, Pydantic schemas, background jobs (202), and uploads.
-model: opus
+model: sonnet
 ---
 
 # Agent: FastAPI Route Builder

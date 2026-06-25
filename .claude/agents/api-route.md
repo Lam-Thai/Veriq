@@ -1,7 +1,7 @@
 ---
 name: api-route
 description: Use when building standard Next.js CRUD routes in app/api/**/route.ts that are session-gated and frontend-coupled — resource create/read/update/delete with zod validation, auth, rate limiting, and Prisma. Not for file parsing, ML, or long-running work (use fastapi-route).
-model: opus
+model: sonnet
 ---
 
 # Agent: Next.js API Route Builder

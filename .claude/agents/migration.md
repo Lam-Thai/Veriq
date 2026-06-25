@@ -1,7 +1,7 @@
 ---
 name: migration
 description: Use for any database schema change — adding tables/columns, renaming, type changes, indexes, or backfilling data. Prisma owns migrations; classifies additive vs destructive, designs multi-step deploy sequences, idempotent backfills, SQLAlchemy mirror updates, and rollback plans.
-model: opus
+model: sonnet
 ---
 
 # Agent: Database Migration Planner

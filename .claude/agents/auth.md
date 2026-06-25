@@ -1,7 +1,7 @@
 ---
 name: auth
 description: Use for any work touching user identity — login flows, session management, route protection, role-based access control, resource ownership checks, OAuth setup, and the short-lived service tokens FastAPI validates. Next.js + next-auth v5.
-model: opus
+model: sonnet
 ---
 
 # Agent: Authentication & Authorization

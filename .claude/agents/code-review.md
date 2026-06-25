@@ -1,7 +1,7 @@
 ---
 name: code-review
 description: Use when reviewing a PR, auditing existing code for quality, or asking "is this production-ready?" across both TypeScript and Python. Categorizes findings as Blocker/Suggestion/Nit, provides corrected code for blockers, and flags the automatic blockers.
-model: opus
+model: sonnet
 ---
 
 # Agent: Code Reviewer
