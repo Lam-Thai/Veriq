@@ -15,6 +15,7 @@ and skills are auto-discovered.
     code-review.md
     database.md
     fastapi-route.md
+    github-issue.md
     migration.md
     security-audit.md
     testing.md
@@ -25,6 +26,7 @@ and skills are auto-discovered.
     design-system/SKILL.md
     engineering-standards/SKILL.md
     error-handling/SKILL.md
+    github-issues/SKILL.md
     nextjs/SKILL.md
     postgresql/SKILL.md
     prisma/SKILL.md
@@ -53,6 +55,7 @@ and skills are auto-discovered.
 | `code-review` | typescript, python, prisma, sqlalchemy, postgresql, security, api-contracts, error-handling, engineering-standards |
 | `database` | postgresql, prisma, sqlalchemy, typescript, python, engineering-standards |
 | `fastapi-route` | python, sqlalchemy, api-contracts, security, error-handling, postgresql, engineering-standards |
+| `github-issue` | github-issues, engineering-standards |
 | `migration` | postgresql, prisma, sqlalchemy, engineering-standards |
 | `security-audit` | security, api-contracts, typescript, python, error-handling, engineering-standards |
 | `testing` | typescript, python, api-contracts, error-handling, engineering-standards |
