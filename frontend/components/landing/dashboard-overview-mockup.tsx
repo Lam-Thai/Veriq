@@ -1,11 +1,5 @@
-const MONTHLY_BARS = [
-  { month: "Jan", heightPct: 58 },
-  { month: "Feb", heightPct: 64 },
-  { month: "Mar", heightPct: 70 },
-  { month: "Apr", heightPct: 66 },
-  { month: "May", heightPct: 78 },
-  { month: "Jun", heightPct: 100 },
-];
+import { BrowserChrome } from "@/components/ui/browser-chrome";
+import { MonthlyBarChart } from "@/components/ui/monthly-bar-chart";
 
 type StatTile = {
   label: string;
@@ -27,16 +21,7 @@ const STAT_TILES: StatTile[] = [
 export function DashboardOverviewMockup() {
   return (
     <div className="mx-auto w-full max-w-4xl rounded-lg bg-white shadow-(--shadow-product)">
-      <div className="flex items-center gap-2 rounded-t-lg border-b border-hairline px-4 py-3">
-        <span className="flex gap-1.5" aria-hidden="true">
-          <span className="h-2.5 w-2.5 rounded-full bg-hairline" />
-          <span className="h-2.5 w-2.5 rounded-full bg-hairline" />
-          <span className="h-2.5 w-2.5 rounded-full bg-hairline" />
-        </span>
-        <span className="ml-2 truncate text-(length:--type-fine-print-size) text-ink-muted-48">
-          app.veriq.com/overview
-        </span>
-      </div>
+      <BrowserChrome url="app.veriq.com/overview" />
 
       <div className="p-6 sm:p-8">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -54,27 +39,7 @@ export function DashboardOverviewMockup() {
             <p className="text-(length:--type-caption-size) font-semibold text-ink">Monthly income</p>
             <span className="text-(length:--type-fine-print-size) text-ink-muted-48">All sources</span>
           </div>
-          <div className="flex h-36 items-end gap-3">
-            {MONTHLY_BARS.map((bar) => (
-              <div
-                key={bar.month}
-                className={
-                  bar.month === "Jun" ? "flex-1 rounded-t-xs bg-primary" : "flex-1 rounded-t-xs bg-primary/25"
-                }
-                style={{ height: `${bar.heightPct}%` }}
-              />
-            ))}
-          </div>
-          <div className="mt-2 flex gap-3">
-            {MONTHLY_BARS.map((bar) => (
-              <span
-                key={bar.month}
-                className="flex-1 text-center text-(length:--type-fine-print-size) text-ink-muted-48"
-              >
-                {bar.month}
-              </span>
-            ))}
-          </div>
+          <MonthlyBarChart trackHeightClassName="h-36" />
         </div>
       </div>
     </div>

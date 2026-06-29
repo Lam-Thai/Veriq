@@ -1,4 +1,6 @@
 import { CheckIcon } from "@/components/ui/icons";
+import { BrowserChrome } from "@/components/ui/browser-chrome";
+import { MonthlyBarChart } from "@/components/ui/monthly-bar-chart";
 
 type ConnectedSource = {
   name: string;
@@ -11,16 +13,6 @@ const CONNECTED_SOURCES: ConnectedSource[] = [
   { name: "DoorDash" },
 ];
 
-// Jan–Jun, relative bar heights (percent of track) — June is the "current" highlighted month.
-const MONTHLY_BARS = [
-  { month: "Jan", heightPct: 58 },
-  { month: "Feb", heightPct: 64 },
-  { month: "Mar", heightPct: 70 },
-  { month: "Apr", heightPct: 66 },
-  { month: "May", heightPct: 78 },
-  { month: "Jun", heightPct: 100 },
-];
-
 /**
  * The hero's single focal artifact: a browser-chrome dashboard mockup. Pure presentation —
  * no live data, no interactivity. This is the one place in the hero that gets the system's
@@ -29,17 +21,7 @@ const MONTHLY_BARS = [
 export function HeroMockup() {
   return (
     <div className="mx-auto w-full max-w-3xl rounded-lg bg-white shadow-(--shadow-product)">
-      {/* Browser chrome */}
-      <div className="flex items-center gap-2 rounded-t-lg border-b border-hairline px-4 py-3">
-        <span className="flex gap-1.5" aria-hidden="true">
-          <span className="h-2.5 w-2.5 rounded-full bg-hairline" />
-          <span className="h-2.5 w-2.5 rounded-full bg-hairline" />
-          <span className="h-2.5 w-2.5 rounded-full bg-hairline" />
-        </span>
-        <span className="ml-2 truncate text-(length:--type-fine-print-size) text-ink-muted-48">
-          app.veriq.com / overview
-        </span>
-      </div>
+      <BrowserChrome url="app.veriq.com / overview" />
 
       <div className="grid grid-cols-1 gap-6 p-6 sm:grid-cols-[1fr_auto] sm:gap-8 sm:p-8">
         {/* Left: headline figure + chart */}
@@ -49,7 +31,7 @@ export function HeroMockup() {
               <p className="text-(length:--type-caption-size) text-ink-muted-48">
                 Verified income · last 6 months
               </p>
-              <p className="mt-1 text-3xl font-semibold tracking-(--type-display-lg-ls) text-ink sm:text-4xl">
+              <p className="mt-1 font-(family-name:--font-display) text-3xl font-semibold tracking-(--type-display-lg-ls) text-ink sm:text-4xl">
                 $63,180
               </p>
             </div>
@@ -61,27 +43,7 @@ export function HeroMockup() {
 
           {/* Bar chart */}
           <div className="relative">
-            <div className="flex h-32 items-end gap-3">
-              {MONTHLY_BARS.map((bar) => (
-                <div
-                  key={bar.month}
-                  className={
-                    bar.month === "Jun" ? "flex-1 rounded-t-xs bg-primary" : "flex-1 rounded-t-xs bg-primary/25"
-                  }
-                  style={{ height: `${bar.heightPct}%` }}
-                />
-              ))}
-            </div>
-            <div className="mt-2 flex gap-3">
-              {MONTHLY_BARS.map((bar) => (
-                <span
-                  key={bar.month}
-                  className="flex-1 text-center text-(length:--type-fine-print-size) text-ink-muted-48"
-                >
-                  {bar.month}
-                </span>
-              ))}
-            </div>
+            <MonthlyBarChart trackHeightClassName="h-32" />
 
             {/* Floating annotation overlapping the May bar */}
             <div className="absolute -top-2 left-[58%] hidden w-44 -translate-y-full rounded-md border border-hairline bg-white p-2.5 shadow-(--shadow-product) sm:block">

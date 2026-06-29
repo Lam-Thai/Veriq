@@ -19,6 +19,9 @@ export function PlatformGrid() {
   );
 
   const connectedCount = Object.values(statuses).filter((status) => status === "connected").length;
+  const connectedTotal = PLATFORMS.filter(
+    (platform) => statuses[platform.name] === "connected",
+  ).reduce((sum, platform) => sum + platform.verifiedAmount, 0);
 
   function handleConnect(name: string) {
     setStatuses((current) => ({ ...current, [name]: "connected" }));
@@ -27,7 +30,8 @@ export function PlatformGrid() {
   return (
     <div>
       <p className="text-center text-(length:--type-caption-size) text-ink-muted-48">
-        {connectedCount} of {PLATFORMS.length} connected · $47,700 verified
+        {connectedCount} of {PLATFORMS.length} connected · ${connectedTotal.toLocaleString()}{" "}
+        verified
       </p>
 
       <ul className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">

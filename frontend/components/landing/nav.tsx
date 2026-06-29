@@ -52,12 +52,7 @@ export function Nav() {
         </ul>
 
         <div className="hidden md:block">
-          <PillButton
-            as="a"
-            href="#"
-            variant="primary"
-            className="px-5 py-2.5 text-(length:--type-button-utility-size)"
-          >
+          <PillButton as="a" href="#" variant="primary" size="compact">
             Generate Report
           </PillButton>
         </div>
