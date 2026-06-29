@@ -311,20 +311,6 @@ export function BuildingIcon({ className }: IconProps) {
   );
 }
 
-export function ChevronDownIcon({ className }: IconProps) {
-  return (
-    <svg
-      viewBox="0 0 20 20"
-      fill="none"
-      className={className}
-      aria-hidden="true"
-      focusable="false"
-    >
-      <path d="M5 7.5L10 12.5L15 7.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
 export function MenuIcon({ className }: IconProps) {
   return (
     <svg
