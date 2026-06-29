@@ -1,0 +1,19 @@
+# OS / editor
+.DS_Store
+*.pem
+.vscode/
+.idea/
+
+# Python (backend/)
+backend/.venv/
+backend/__pycache__/
+backend/**/__pycache__/
+backend/.mypy_cache/
+backend/.ruff_cache/
+backend/.pytest_cache/
+backend/*.egg-info/
+backend/.env
+
+# env files
+.env
+.env.local
