@@ -133,13 +133,10 @@
   --font-display: var(--font-display);
   --font-text: var(--font-text);
 
-  --spacing-xxs: var(--space-xxs);
-  --spacing-xs: var(--space-xs);
-  --spacing-sm: var(--space-sm);
-  --spacing-md: var(--space-md);
-  --spacing-lg: var(--space-lg);
-  --spacing-xl: var(--space-xl);
-  --spacing-xxl: var(--space-xxl);
+  /* Deliberately not registering xs/sm/md/lg/xl spacing aliases here: Tailwind v4 reuses
+     those exact names for its built-in max-w/w/h scale, and overriding them would silently
+     hijack those unrelated utilities. Use arbitrary value syntax instead, e.g. p-(--space-md).
+     spacing-section is a unique name, so it is safe to register. */
   --spacing-section: var(--space-section);
 
   --container-text: var(--container-text);
