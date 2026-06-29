@@ -1,26 +1,178 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Colors */
+  --color-primary: #0066cc; /* every link & CTA */
+  --color-primary-focus: #0071e3; /* focus ring */
+  --color-primary-on-dark: #2997ff; /* links on dark tiles */
+  --color-on-primary: #ffffff;
+  --color-canvas: #ffffff;
+  --color-canvas-parchment: #f5f5f7; /* signature off-white; alt tiles */
+  --color-surface-pearl: #fafafc;
+  --color-surface-tile-1: #272729; /* primary dark tile */
+  --color-surface-tile-2: #2a2a2c;
+  --color-surface-tile-3: #252527;
+  --color-surface-black: #000000; /* nav bar only */
+  --color-chip-translucent-64: rgba(210, 210, 215, 0.64);
+  --color-ink: #1d1d1f; /* headlines & body on light */
+  --color-body: #1d1d1f;
+  --color-body-on-dark: #ffffff;
+  --color-body-muted: #cccccc; /* secondary copy on dark tiles */
+  --color-ink-muted-80: #333333;
+  --color-ink-muted-48: #7a7a7a; /* fine print */
+  --color-divider-soft: #f0f0f0;
+  --color-hairline: #e0e0e0;
+  --color-hairline-alpha: rgba(0, 0, 0, 0.08);
+  --color-verified: #1d8a4e;
+  --color-verified-surface: #e8f5ee;
+  --color-pending: #9a6a00;
+  --color-pending-surface: #fbf3e0;
+  --color-danger: #c4271c;
+  --color-danger-surface: #fdeceb;
+
+  /* Typography */
+  --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display",
+    var(--font-inter), system-ui, sans-serif;
+  --font-text: -apple-system, BlinkMacSystemFont, "SF Pro Text",
+    var(--font-inter), system-ui, sans-serif;
+  /* weights used: 300 / 400 / 600 / 700 — never 500 */
+  --type-hero-display-size: 56px;
+  --type-hero-display-lh: 1.07;
+  --type-hero-display-ls: -0.28px; /* weight 600 */
+  --type-display-lg-size: 40px;
+  --type-display-lg-lh: 1.1;
+  --type-display-lg-ls: 0; /* weight 600, section H2s */
+  --type-lead-size: 28px;
+  --type-lead-lh: 1.14;
+  --type-lead-ls: 0.196px; /* weight 400 */
+  --type-tagline-size: 21px;
+  --type-tagline-lh: 1.19;
+  --type-tagline-ls: 0.231px; /* weight 600 */
+  --type-body-size: 17px;
+  --type-body-lh: 1.47;
+  --type-body-ls: -0.374px; /* weight 400, body copy */
+  --type-caption-size: 14px;
+  --type-caption-lh: 1.43;
+  --type-caption-ls: -0.224px;
+  --type-button-large-size: 18px;
+  --type-button-large-lh: 1;
+  --type-button-large-ls: 0;
+  --type-button-utility-size: 14px;
+  --type-button-utility-lh: 1.29;
+  --type-button-utility-ls: -0.224px;
+  --type-fine-print-size: 12px;
+  --type-fine-print-lh: 1;
+  --type-fine-print-ls: -0.12px;
+  --type-nav-link-size: 12px;
+  --type-nav-link-lh: 1;
+  --type-nav-link-ls: -0.12px;
+
+  /* Spacing (8px base) */
+  --space-xxs: 4px;
+  --space-xs: 8px;
+  --space-sm: 12px;
+  --space-md: 17px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+  --space-xxl: 48px;
+  --space-section: 80px; /* tile vertical padding */
+  --container-text: 980px; /* text-heavy sections */
+  --container-grid: 1440px; /* card grids */
+  --grid-gutter: 24px;
+
+  /* Shape */
+  --radius-none: 0px;
+  --radius-xs: 5px;
+  --radius-sm: 8px;
+  --radius-md: 11px;
+  --radius-lg: 18px;
+  --radius-pill: 9999px; /* the signature pill — primary CTAs, chips */
+
+  /* Motion */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.87, 0, 0.13, 1);
+  --duration-fast: 120ms;
+  --duration-base: 200ms;
+  --duration-slow: 350ms;
+  --press-scale: 0.95; /* the one micro-interaction: buttons scale(0.95) on press/active */
+
+  /* Elevation — exactly ONE shadow in the whole system */
+  --shadow-product: 3px 5px 30px 0 rgba(0, 0, 0, 0.22);
+  --border-hairline: 1px solid var(--color-hairline-alpha);
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+  --color-primary: var(--color-primary);
+  --color-primary-focus: var(--color-primary-focus);
+  --color-primary-on-dark: var(--color-primary-on-dark);
+  --color-on-primary: var(--color-on-primary);
+  --color-canvas: var(--color-canvas);
+  --color-canvas-parchment: var(--color-canvas-parchment);
+  --color-surface-pearl: var(--color-surface-pearl);
+  --color-surface-tile-1: var(--color-surface-tile-1);
+  --color-surface-tile-2: var(--color-surface-tile-2);
+  --color-surface-tile-3: var(--color-surface-tile-3);
+  --color-surface-black: var(--color-surface-black);
+  --color-chip-translucent-64: var(--color-chip-translucent-64);
+  --color-ink: var(--color-ink);
+  --color-body: var(--color-body);
+  --color-body-on-dark: var(--color-body-on-dark);
+  --color-body-muted: var(--color-body-muted);
+  --color-ink-muted-80: var(--color-ink-muted-80);
+  --color-ink-muted-48: var(--color-ink-muted-48);
+  --color-divider-soft: var(--color-divider-soft);
+  --color-hairline: var(--color-hairline);
+  --color-hairline-alpha: var(--color-hairline-alpha);
+  --color-verified: var(--color-verified);
+  --color-verified-surface: var(--color-verified-surface);
+  --color-pending: var(--color-pending);
+  --color-pending-surface: var(--color-pending-surface);
+  --color-danger: var(--color-danger);
+  --color-danger-surface: var(--color-danger-surface);
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --font-display: var(--font-display);
+  --font-text: var(--font-text);
+
+  --spacing-xxs: var(--space-xxs);
+  --spacing-xs: var(--space-xs);
+  --spacing-sm: var(--space-sm);
+  --spacing-md: var(--space-md);
+  --spacing-lg: var(--space-lg);
+  --spacing-xl: var(--space-xl);
+  --spacing-xxl: var(--space-xxl);
+  --spacing-section: var(--space-section);
+
+  --container-text: var(--container-text);
+  --container-grid: var(--container-grid);
+
+  --radius-none: var(--radius-none);
+  --radius-xs: var(--radius-xs);
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius-md);
+  --radius-lg: var(--radius-lg);
+  --radius-pill: var(--radius-pill);
+
+  --ease-out: var(--ease-out);
+  --ease-in-out: var(--ease-in-out);
+
+  --shadow-product: var(--shadow-product);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-canvas);
+  color: var(--color-body);
+  font-family: var(--font-text);
+}
+
+/* Headline / display text defaults to the display stack */
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
+}
+
+/* Shared focus ring for every interactive element */
+:focus-visible {
+  outline: 2px solid var(--color-primary-focus);
+  outline-offset: 2px;
 }
