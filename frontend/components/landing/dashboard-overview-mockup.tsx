@@ -56,15 +56,23 @@ export function DashboardOverviewMockup() {
           </div>
           <div className="flex h-36 items-end gap-3">
             {MONTHLY_BARS.map((bar) => (
-              <div key={bar.month} className="flex flex-1 flex-col items-center gap-2">
-                <div
-                  className={
-                    bar.month === "Jun" ? "w-full rounded-t-xs bg-primary" : "w-full rounded-t-xs bg-primary/25"
-                  }
-                  style={{ height: `${bar.heightPct}%` }}
-                />
-                <span className="text-(length:--type-fine-print-size) text-ink-muted-48">{bar.month}</span>
-              </div>
+              <div
+                key={bar.month}
+                className={
+                  bar.month === "Jun" ? "flex-1 rounded-t-xs bg-primary" : "flex-1 rounded-t-xs bg-primary/25"
+                }
+                style={{ height: `${bar.heightPct}%` }}
+              />
+            ))}
+          </div>
+          <div className="mt-2 flex gap-3">
+            {MONTHLY_BARS.map((bar) => (
+              <span
+                key={bar.month}
+                className="flex-1 text-center text-(length:--type-fine-print-size) text-ink-muted-48"
+              >
+                {bar.month}
+              </span>
             ))}
           </div>
         </div>
