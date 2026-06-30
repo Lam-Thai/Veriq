@@ -53,9 +53,54 @@ Weights: 400 body / 500 label+caption / 600 subheading / 700 display only.
 ## Color Rules
 - Define 4–6 base hex values per project, derive all others as tints/shades.
 - Semantic tokens: `--color-primary`, `--color-surface`, `--color-border`, `--color-muted`, `--color-danger`, `--color-success`.
+- Status colors are pairs, not singles: a foreground (`--color-verified`) plus its matching
+  low-contrast background (`--color-verified-surface`) — same shape for pending/danger/etc.
+  This is what lets a status pill or badge stay readable without ever needing a shadow or border.
 - Never hardcode hex in component files — CSS vars or Tailwind semantic tokens only.
 - Every component works in both light and dark mode before it's marked done.
 - Color is never the sole information carrier — pair with text, icon, or pattern.
+
+---
+
+## Tailwind v4 Token Wiring
+
+Tokens live as plain custom properties in `:root`, then are selectively re-exposed to Tailwind
+via `@theme inline` so utilities like `bg-primary` or `text-verified` resolve.
+
+```css
+:root {
+  --color-primary: #0066cc;
+  --space-md: 17px; /* a deliberately off-grid value is fine — it's still a token */
+}
+
+@theme inline {
+  --color-primary: var(--color-primary); /* registers `bg-primary`, `text-primary`, etc. */
+  /* Do NOT register xs/sm/md/lg/xl spacing or sizing aliases here — Tailwind v4 reuses
+     those exact names for its built-in w/h/max-w scale, and registering a same-named
+     token silently hijacks those unrelated utilities project-wide. Give scale tokens
+     unique names (e.g. `--space-section`) before registering, or skip registration and
+     reach them with arbitrary-value syntax instead. */
+}
+```
+
+For any token that isn't (or shouldn't be) registered in `@theme inline`, use Tailwind v4's
+arbitrary CSS-var syntax directly in components rather than hardcoding the value:
+```tsx
+className="p-(--space-md) text-(length:--type-body-size)/(--type-body-lh) tracking-(--type-body-ls)"
+```
+
+A type-scale entry is three tokens, not two: size, line-height, **and letter-spacing**
+(`--type-body-size` / `-lh` / `-ls`). Treat letter-spacing as part of the scale per role, not
+an afterthought tuned per component.
+
+---
+
+## Elevation
+- Exactly one shadow token in the whole system (`--shadow-product`), reserved for
+  product-screenshot / mockup surfaces only.
+- Every other container (cards, grids, panels) is flat: a hairline border, never a shadow.
+  This is the concrete version of "no box-shadow on every card" — one deliberate exception,
+  applied nowhere else.
 
 ---
 

@@ -56,10 +56,19 @@ Push `"use client"` as far down the tree as possible — only the leaf that need
 interactivity should be a client component. Wrap it in a Server Component parent
 that fetches data.
 
+When a client leaf is carved out of an otherwise-static section (e.g. just the mobile menu
+toggle inside a server-rendered nav), say so in a one-line comment on the component —
+state what it owns and why it's isolated. The next reader shouldn't have to guess why one
+file in a folder of server components has `"use client"`.
+
 ---
 
 ## File Structure
 
+Two conventions, chosen by what the component is for:
+
+**Stateful / business-logic components** (anything with data fetching, mutations, or behavior
+worth unit-testing) get the full folder treatment:
 ```
 components/
   [feature-name]/
@@ -67,8 +76,18 @@ components/
     [feature-name].tsx    ← implementation
     [feature-name].test.tsx
 ```
-
 Never put logic directly in `index.tsx`. It is only a re-export barrel.
+
+**Static / presentational components** (marketing pages, layout chrome, visual-only mockups
+with no business logic to test) skip the folder and barrel — one flat file per component,
+named export, grouped by area:
+```
+components/
+  landing/   [section-name].tsx   ← e.g. hero.tsx, nav.tsx, problem-section.tsx
+  ui/        [primitive-name].tsx ← e.g. pill-button.tsx, card.tsx
+```
+Don't scaffold a test file for a component that renders static markup with no logic branch
+to assert on — that's test-suite noise, not coverage.
 
 ---
 

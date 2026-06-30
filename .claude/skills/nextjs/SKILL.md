@@ -5,6 +5,13 @@ description: Next.js App Router patterns — RSC vs client component decision, f
 
 # Skill: Next.js (App Router)
 
+## Check the Installed Version First
+This repo can pin a Next.js major version newer than your training data (check
+`frontend/package.json`). If `frontend/AGENTS.md` says so explicitly, treat it as
+authoritative: skim `node_modules/next/dist/docs/` for the APIs you're about to use before
+relying on patterns from memory — caching defaults, config shape, and route conventions have
+all changed across majors.
+
 ## RSC Decision Rule
 Default: Server Component. Add `"use client"` only when you need:
 - `useState` / `useReducer` / `useEffect`
