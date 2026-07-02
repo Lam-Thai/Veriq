@@ -39,10 +39,11 @@ export function findPlatformBySlug(slug: string): Platform | undefined {
  * Single seam for launching a platform's login flow. Every platform currently resolves to the
  * same internal mock consent screen since none has a registered OAuth app/client ID yet — wiring
  * up a real provider is a follow-up, per-platform change to this function's body only, not to
- * any caller.
+ * any caller. Deliberately window-free (returns a path-relative URL, which window.open() and
+ * location.href both resolve fine) so this module stays safe to import from server code — only
+ * PlatformGrid actually calls this, from a click handler.
  */
 export function getAuthorizationUrl(slug: string, state: string): string {
-  const url = new URL(`/connect/${slug}/authorize`, window.location.origin);
-  url.searchParams.set("state", state);
-  return url.toString();
+  const params = new URLSearchParams({ state });
+  return `/connect/${encodeURIComponent(slug)}/authorize?${params.toString()}`;
 }

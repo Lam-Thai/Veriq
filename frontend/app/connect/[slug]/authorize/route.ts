@@ -1,10 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { cookies } from "next/headers";
 import { findPlatformBySlug } from "@/components/landing/platform-data";
-import { stateCookieName } from "@/lib/connect-flow";
-
-// crypto.randomUUID() shape — bounds the value we'll echo back into a Set-Cookie header.
-const STATE_PATTERN = /^[A-Za-z0-9-]{8,128}$/;
+import { STATE_PATTERN, stateCookieName } from "@/lib/connect-flow";
 
 /**
  * Entry point for a platform's login flow (popup target and same-tab fallback target alike).

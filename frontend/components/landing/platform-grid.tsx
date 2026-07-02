@@ -79,9 +79,14 @@ export function PlatformGrid() {
   );
   const [announcement, setAnnouncement] = useState("");
   const [fallbackAuthorizationUrl, setFallbackAuthorizationUrl] = useState<string | null>(null);
+  // Tracks which urlConnectResult (by reference — see cachedUrlConnectResult) has already been
+  // folded into `statuses`, so the fold below runs exactly once and `statuses` stays the single
+  // source of truth afterward instead of being permanently re-masked by a stale URL value.
+  const [reconciledUrlResult, setReconciledUrlResult] = useState<UrlConnectResult>(null);
 
   const pendingAttempts = useRef<Record<string, PendingAttempt>>({});
   const pollIntervals = useRef<Record<string, ReturnType<typeof setInterval>>>({});
+  const inFlightSlugs = useRef<Set<string>>(new Set());
 
   // No-popup fallback: the callback route only ever appends this param after it has verified
   // the flow's CSRF state against its HttpOnly cookie, so it's safe to trust directly here.
@@ -91,9 +96,18 @@ export function PlatformGrid() {
     getUrlConnectResultServerSnapshot,
   );
 
-  const effectiveStatuses = urlConnectResult
-    ? { ...statuses, [urlConnectResult.slug]: resultToStatus(urlConnectResult.result) }
-    : statuses;
+  // React's documented "adjusting state during render" pattern: fold the one-time URL result
+  // into `statuses` the first time it appears, comparing by reference so this only ever fires
+  // once per result. No effect involved, so there's no window where a later, legitimate update
+  // to the same slug (from a message or the poll timeout) could be overwritten by a re-applied
+  // stale value.
+  if (urlConnectResult && urlConnectResult !== reconciledUrlResult) {
+    setReconciledUrlResult(urlConnectResult);
+    setStatuses((current) => ({
+      ...current,
+      [urlConnectResult.slug]: resultToStatus(urlConnectResult.result),
+    }));
+  }
 
   // Housekeeping only (no React state involved) — strip the one-time result params so a refresh
   // doesn't re-read them, now that `cachedUrlConnectResult` above has already latched the value.
@@ -151,11 +165,9 @@ export function PlatformGrid() {
     };
   }, []);
 
-  const connectedCount = Object.values(effectiveStatuses).filter(
-    (status) => status === "connected",
-  ).length;
+  const connectedCount = Object.values(statuses).filter((status) => status === "connected").length;
   const connectedTotal = PLATFORMS.filter(
-    (platform) => effectiveStatuses[platform.slug] === "connected",
+    (platform) => statuses[platform.slug] === "connected",
   ).reduce((sum, platform) => sum + platform.verifiedAmount, 0);
 
   function handleConnect(slug: string) {
@@ -164,6 +176,12 @@ export function PlatformGrid() {
       existing.popup?.focus();
       return;
     }
+    // Synchronous re-entrancy guard: claims the slug before any work below (including
+    // window.open) runs, so a second invocation for the same slug — e.g. a repeated click before
+    // React has committed the disabled button state — sees the claim and returns immediately,
+    // rather than racing to start a second attempt before `pendingAttempts` is populated.
+    if (inFlightSlugs.current.has(slug)) return;
+    inFlightSlugs.current.add(slug);
 
     const state = crypto.randomUUID();
     const authorizationUrl = getAuthorizationUrl(slug, state);
@@ -175,6 +193,7 @@ export function PlatformGrid() {
       `veriq-connect-${slug}`,
       "width=480,height=640,popup=1",
     );
+    inFlightSlugs.current.delete(slug);
 
     if (!popup || popup.closed) {
       // Popup blocked — fall back to a full same-tab navigation through the same authorize URL.
@@ -213,7 +232,7 @@ export function PlatformGrid() {
           <PlatformCard
             key={platform.slug}
             platform={platform}
-            status={effectiveStatuses[platform.slug] ?? platform.status}
+            status={statuses[platform.slug] ?? platform.status}
             onConnect={() => handleConnect(platform.slug)}
           />
         ))}

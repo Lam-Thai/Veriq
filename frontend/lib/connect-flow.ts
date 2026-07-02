@@ -33,12 +33,17 @@ export type CallbackRequestBody = {
   decision: ConnectDecision;
 };
 
+// crypto.randomUUID() shape — the authorize route mints state values matching this, and the
+// callback route's validator below enforces the same bounds so a caller can't submit an
+// oversized or malformed state to the callback route.
+export const STATE_PATTERN = /^[A-Za-z0-9-]{8,128}$/;
+
 export function isCallbackRequestBody(value: unknown): value is CallbackRequestBody {
   if (typeof value !== "object" || value === null) return false;
   const candidate = value as Record<string, unknown>;
   return (
     typeof candidate.state === "string" &&
-    candidate.state.length > 0 &&
+    STATE_PATTERN.test(candidate.state) &&
     (candidate.decision === "approve" || candidate.decision === "deny")
   );
 }
