@@ -4,6 +4,8 @@
  * Icon-only interactive elements must supply their own `aria-label` at the call site.
  */
 
+import { cn } from "@/lib/cn";
+
 type IconProps = {
   className?: string;
 };
@@ -321,6 +323,26 @@ export function MenuIcon({ className }: IconProps) {
       focusable="false"
     >
       <path d="M4 6H20M4 12H20M4 18H20" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+export function SpinnerIcon({ className }: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 20 20"
+      fill="none"
+      className={cn("animate-spin", className)}
+      aria-hidden="true"
+      focusable="false"
+    >
+      <circle cx="10" cy="10" r="8" stroke="currentColor" strokeWidth="2" opacity="0.25" />
+      <path
+        d="M18 10a8 8 0 0 0-8-8"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
     </svg>
   );
 }
