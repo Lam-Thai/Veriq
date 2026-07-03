@@ -1,6 +1,5 @@
 # OS / editor
 .DS_Store
-*.pem
 .vscode/
 .idea/
 
@@ -14,6 +13,15 @@ backend/.pytest_cache/
 backend/*.egg-info/
 backend/.env
 
-# env files
+# secrets / credentials — never commit these
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*credentials*.json
+*service-account*.json
 .env
-.env.local
+.env.*
+!.env.example
+!.env.*.example
