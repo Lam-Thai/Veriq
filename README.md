@@ -27,3 +27,15 @@ ruff check .
 mypy app
 pytest -q
 ```
+
+## CI: Secret scanning
+
+Every pull request is scanned for committed secrets by [GitGuardian](https://www.gitguardian.com/) (`.github/workflows/gitguardian.yml`). The check fails the PR if a secret is detected in the diff.
+
+To enable it on this repo, add a repo secret with a GitGuardian API key (scope: `scan`):
+
+1. Create/retrieve an API key from your [GitGuardian dashboard](https://dashboard.gitguardian.com/).
+2. In GitHub, go to **Settings → Secrets and variables → Actions → New repository secret**.
+3. Name it `GITGUARDIAN_API_KEY` and paste the key as the value.
+
+The workflow only runs on `pull_request` (never `pull_request_target`), so the secret is never exposed to code checked out from an untrusted fork.
