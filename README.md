@@ -12,6 +12,10 @@ backend/    FastAPI (Python 3.12+) — health check + scaffold for future routes
 cd frontend
 npm install
 npm run dev      # http://localhost:3000
+
+npx playwright install --with-deps chromium   # first time only
+npm run test:e2e     # run the Playwright e2e suite headlessly
+npm run test:e2e:ui  # run it in the interactive UI mode
 ```
 
 ## Backend
@@ -39,3 +43,9 @@ To enable it on this repo, add a repo secret with a GitGuardian API key (scope: 
 3. Name it `GITGUARDIAN_API_KEY` and paste the key as the value.
 
 The workflow only runs on `pull_request` (never `pull_request_target`), so the secret is never exposed to code checked out from an untrusted fork.
+
+## CI: End-to-end tests
+
+Every pull request runs the Playwright e2e suite (`.github/workflows/playwright.yml`) against a production build of the frontend (`npm run build && npm run start`). The workflow installs dependencies and Chromium reproducibly (`npm ci`, `npx playwright install --with-deps chromium`), then runs `npm run test:e2e`. On failure, the HTML report is uploaded as a build artifact for debugging.
+
+The report is uploaded as a build artifact on every run (except when the job is cancelled), so passing runs can be inspected too. Tests live under `frontend/e2e/` and are configured in `frontend/playwright.config.ts`. Add new smoke/e2e specs there as coverage grows.
