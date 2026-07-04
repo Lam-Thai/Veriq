@@ -46,6 +46,6 @@ The workflow only runs on `pull_request` (never `pull_request_target`), so the s
 
 ## CI: End-to-end tests
 
-Every pull request runs the Playwright e2e suite (`.github/workflows/playwright.yml`) against a production build of the frontend (`npm run build && npm run start`). The workflow installs dependencies and Chromium reproducibly (`npm ci`, `npx playwright install --with-deps chromium`), then runs `npm run test:e2e`. On failure, the HTML report is uploaded as a build artifact for debugging.
+Every pull request runs the Playwright e2e suite (`.github/workflows/playwright.yml`) against a production build of the frontend. The workflow installs dependencies and Chromium reproducibly (`npm ci`, `npx playwright install --with-deps chromium`), builds the app (`npm run build`), then runs `npm run test:e2e`. The HTML report is uploaded as a build artifact on every run except when the job is cancelled, so both passing and failing runs can be inspected.
 
-The report is uploaded as a build artifact on every run (except when the job is cancelled), so passing runs can be inspected too. Tests live under `frontend/e2e/` and are configured in `frontend/playwright.config.ts`. Add new smoke/e2e specs there as coverage grows.
+Tests live under `frontend/e2e/` and are configured in `frontend/playwright.config.ts`. Add new smoke/e2e specs there as coverage grows.

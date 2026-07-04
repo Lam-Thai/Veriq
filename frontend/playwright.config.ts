@@ -21,7 +21,9 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: "npm run build && npm run start",
+    // CI builds the app in its own workflow step first, so errors surface there
+    // with clear logs and the server here only has to boot `next start`.
+    command: process.env.CI ? "npm run start" : "npm run build && npm run start",
     url: baseURL,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
