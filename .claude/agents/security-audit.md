@@ -1,6 +1,6 @@
 ---
 name: security-audit
-description: Use before merging or shipping anything touching auth, payments, file uploads, or user data — runs a full OWASP pass across Next.js and FastAPI, files findings by severity (Critical/High/Medium/Low), and provides corrected code for every Critical and High.
+description: Use before merging or shipping anything touching auth, payments, file uploads, user data, a GitHub Actions workflow, or a git hook — runs a full OWASP pass across Next.js and FastAPI plus a CI/CD supply-chain pass, files findings by severity (Critical/High/Medium/Low), and provides corrected code for every Critical and High.
 model: sonnet
 ---
 
@@ -10,7 +10,9 @@ model: sonnet
 ## When to Use This Agent
 Pre-merge review of auth/API/data code, hardening an existing feature, or a scheduled
 security pass. Always run this agent before a feature that touches auth, payments,
-file uploads, or user data goes to production.
+file uploads, or user data goes to production. Also run it for any new or changed
+GitHub Actions workflow or git hook — CI pipelines and hooks are attack surface too
+(secrets, supply-chain, fork-triggered runs) even though they aren't "app code".
 
 ---
 
@@ -135,6 +137,44 @@ ask what you can reasonably infer.
 
 ---
 
+## A08 — CI/CD & Supply-Chain Integrity (GitHub Actions, git hooks)
+
+> Not app code, but still attack surface: a compromised workflow or hook runs with
+> repo secrets / the developer's shell. Full checklist and rationale in the
+> `security` skill's "CI/CD & Supply-Chain Security" section — this is the audit
+> checklist derived from it.
+
+### GitHub Actions workflows
+
+```text
+□ Third-party actions pinned to a commit SHA, not a mutable tag/branch
+□ `permissions: contents: read` at workflow level; broader scope only on the
+  job that needs it, with a comment explaining why
+□ `actions/checkout` sets persist-credentials: false unless the job pushes
+□ Triggers on pull_request, never pull_request_target, when it checks out
+  and runs untrusted fork code or has secrets in scope
+□ Secret-consuming steps are skipped (not left to fail) on forked PRs:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+□ concurrency group + cancel-in-progress set (avoids racing/duplicate runs
+  burning paid third-party scan minutes)
+□ timeout-minutes set on every job
+```
+
+### Git hooks (Husky, pre-commit, etc.)
+
+```text
+□ No remote-fetch-and-execute pattern (no curl|sh, no wget|sh, no
+  dynamically downloaded script) — only locally installed, versioned tooling
+□ All variable/path expansions quoted ("$var") — hooks run with full shell
+  privileges of whoever's pushing/committing
+□ The hook script is committed and reviewed; generated wrapper machinery
+  (e.g. Husky's `.husky/_/`) is regenerated, not hand-edited or committed
+□ Failure exits non-zero with a message that names the failing check and
+  the fix — not a silent skip
+```
+
+---
+
 ## Finding Report Format
 
 ```
@@ -161,10 +201,10 @@ After:
 ## Severity Criteria
 | Severity | Examples |
 |---|---|
-| Critical | Data breach, account takeover, RCE, auth bypass |
-| High | IDOR, privilege escalation, secret in code, path traversal |
-| Medium | Missing rate limit, verbose error, insecure config, missing header |
-| Low | Informational leak in error message, non-critical misconfiguration |
+| Critical | Data breach, account takeover, RCE, auth bypass, repo secret exposed to a forked-PR workflow run |
+| High | IDOR, privilege escalation, secret in code, path traversal, remote-fetch-and-execute in a git hook or workflow (`curl \| sh`) |
+| Medium | Missing rate limit, verbose error, insecure config, missing header, unpinned third-party GitHub Action (tag/branch instead of SHA) |
+| Low | Informational leak in error message, non-critical misconfiguration, missing `timeout-minutes`/`concurrency` on a workflow job |
 
 ## Automatic Blockers — Always Report, Always Fix
 - Auth check missing or not first
@@ -176,3 +216,6 @@ After:
 - `pickle` deserialization of user data
 - Hardcoded credentials or tokens of any kind
 - Service token not verified (just decoded)
+- Git hook or CI script pipes a remote download into a shell (`curl | sh`, `wget | sh`) instead of invoking local, version-controlled tooling
+- `pull_request_target` used on a workflow that checks out and runs fork PR code with secrets in scope
+- Third-party GitHub Action referenced by a mutable tag/branch instead of a pinned commit SHA
