@@ -1,0 +1,50 @@
+#!/usr/bin/env sh
+# Runs the repo's test suite before allowing a push. Blocks the push
+# (non-zero exit) if backend pytest or the frontend checks fail.
+#
+# Only invokes locally installed, version-controlled tooling — never
+# fetches or executes remote scripts.
+#
+# To run the same checks manually: sh .husky/pre-push
+
+repo_root=$(cd "$(dirname "$0")/.." && pwd)
+backend_dir="$repo_root/backend"
+frontend_dir="$repo_root/frontend"
+
+echo "pre-push: running backend test suite (pytest)..."
+
+if [ -x "$backend_dir/.venv/Scripts/python.exe" ]; then
+  python_bin="$backend_dir/.venv/Scripts/python.exe"
+elif [ -x "$backend_dir/.venv/bin/python" ]; then
+  python_bin="$backend_dir/.venv/bin/python"
+else
+  echo "pre-push: backend/.venv not found, falling back to 'python' on PATH." >&2
+  python_bin="python"
+fi
+
+if ! (cd "$backend_dir" && "$python_bin" -m pytest -q); then
+  echo "pre-push: backend pytest failed (or backend/.venv is missing)." >&2
+  echo "pre-push: set it up with: cd backend && python -m venv .venv && pip install -e \".[dev]\"" >&2
+  exit 1
+fi
+
+echo "pre-push: running frontend checks (lint, build)..."
+
+if ! (cd "$frontend_dir" && npm run lint); then
+  echo "pre-push: frontend lint failed." >&2
+  exit 1
+fi
+
+if ! (cd "$frontend_dir" && npm run build); then
+  echo "pre-push: frontend build failed." >&2
+  exit 1
+fi
+
+# A frontend unit-test runner (vitest/jest) isn't installed yet. Once
+# `frontend/package.json` gains a `test` script, add it here, e.g.:
+#   if ! (cd "$frontend_dir" && npm run test); then
+#     echo "pre-push: frontend unit tests failed." >&2
+#     exit 1
+#   fi
+
+echo "pre-push: all checks passed."

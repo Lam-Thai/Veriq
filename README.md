@@ -4,6 +4,7 @@
 ```
 frontend/   Next.js (App Router, TypeScript, Tailwind) — npm
 backend/    FastAPI (Python 3.12+) — health check + scaffold for future routes
+.husky/     Git hooks (pre-push test gate), versioned in the repo
 .claude/    Subagents and skills used by Claude Code on this repo
 ```
 
@@ -30,6 +31,29 @@ uvicorn app.main:app --reload --port 8000   # http://localhost:8000/health
 ruff check .
 mypy app
 pytest -q
+```
+
+## Git hooks: pre-push test gate
+
+A [Husky](https://typicode.github.io/husky/) `pre-push` hook (`.husky/pre-push`) runs the test suite before any push leaves your machine, so failures are caught locally instead of on the remote:
+
+1. Backend `pytest` (via `backend/.venv` if present, falling back to `python` on `PATH`).
+2. Frontend `npm run lint` and `npm run build` (a frontend unit-test runner will be added to this step once one exists).
+
+If any check fails, the hook exits non-zero and **blocks the push**. The hook only invokes locally installed, version-controlled tooling — it never downloads or executes remote scripts.
+
+The hook is installed automatically the first time you run `npm install` in `frontend/` (via the `prepare` script), which points Git's `core.hooksPath` at the repo-root `.husky/` directory.
+
+To run the same checks manually at any time:
+
+```sh
+sh .husky/pre-push
+```
+
+To skip the hook for a single push (use sparingly, e.g. for a docs-only change already verified by CI):
+
+```sh
+git push --no-verify
 ```
 
 ## CI: Secret scanning
