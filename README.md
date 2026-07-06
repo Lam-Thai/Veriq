@@ -2,7 +2,6 @@
 
 **Income verification for gig workers.** Veriq lets someone who earns money across Uber, DoorDash, Airbnb, Upwork, Stripe, PayPal, etc. connect those accounts and get back one lender-ready report that proves how much they actually make — the same kind of proof-of-income a landlord, mortgage broker, or lender would normally want a pay stub for.
 
-This repo is also my submission for the **Agentic Workflow Implementer** role. The product code is the *output*; the thing being evaluated is the **workflow that builds it** — a small team of AI agents that write, review, and secure the code before it ever reaches a human reviewer. That workflow is documented in full below.
 
 ---
 
