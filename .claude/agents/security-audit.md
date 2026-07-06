@@ -138,13 +138,15 @@ ask what you can reasonably infer.
 ---
 
 ## A08 — CI/CD & Supply-Chain Integrity (GitHub Actions, git hooks)
+
 > Not app code, but still attack surface: a compromised workflow or hook runs with
 > repo secrets / the developer's shell. Full checklist and rationale in the
 > `security` skill's "CI/CD & Supply-Chain Security" section — this is the audit
 > checklist derived from it.
 
 ### GitHub Actions workflows
-```
+
+```text
 □ Third-party actions pinned to a commit SHA, not a mutable tag/branch
 □ `permissions: contents: read` at workflow level; broader scope only on the
   job that needs it, with a comment explaining why
@@ -159,7 +161,8 @@ ask what you can reasonably infer.
 ```
 
 ### Git hooks (Husky, pre-commit, etc.)
-```
+
+```text
 □ No remote-fetch-and-execute pattern (no curl|sh, no wget|sh, no
   dynamically downloaded script) — only locally installed, versioned tooling
 □ All variable/path expansions quoted ("$var") — hooks run with full shell

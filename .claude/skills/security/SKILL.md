@@ -153,7 +153,8 @@ These are the patterns this repo's workflows (`gitguardian.yml`, `codeql.yml`,
 treat them as required, not optional.
 
 ### GitHub Actions workflows
-```
+
+```text
 □ Third-party actions pinned to a full commit SHA, not a mutable tag/branch
     uses: GitGuardian/ggshield-action@da20be0...30b # v1.52.2  ← SHA first, tag as a comment
 □ Top-level `permissions: contents: read`; broaden only on the specific job
@@ -174,7 +175,8 @@ treat them as required, not optional.
 ```
 
 ### Git hooks (Husky, pre-commit, etc.)
-```
+
+```text
 □ No remote-fetch-and-execute pattern anywhere in the hook or its scripts —
   no `curl ... | sh`, no `wget` piped into a shell, no dynamically fetched
   script. Only invoke locally installed, version-controlled tooling.
@@ -192,7 +194,8 @@ treat them as required, not optional.
 ```
 
 ### Secret hygiene
-```
+
+```text
 □ .gitignore covers key/cert/credential file patterns: *.pem, *.key, *.p12,
   *.pfx, *.crt, *credentials*.json, *service-account*.json
 □ All `.env*` variants ignored except `.env.example` / `.env.*.example`
