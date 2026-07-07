@@ -55,7 +55,17 @@ export function MobileNavMenu() {
               </li>
             ))}
             <li>
-              <Show when="signed-out">
+              <Show
+                when="signed-out"
+                fallback={
+                  <div className="flex items-center gap-2 px-2 py-2.5">
+                    <UserButton />
+                    <span className="text-(length:--type-button-utility-size) font-normal text-white/80">
+                      Account
+                    </span>
+                  </div>
+                }
+              >
                 <Link
                   href="/sign-in"
                   onClick={() => setIsOpen(false)}
@@ -67,14 +77,6 @@ export function MobileNavMenu() {
                 >
                   Sign in
                 </Link>
-              </Show>
-              <Show when="signed-in">
-                <div className="flex items-center gap-2 px-2 py-2.5">
-                  <UserButton />
-                  <span className="text-(length:--type-button-utility-size) font-normal text-white/80">
-                    Account
-                  </span>
-                </div>
               </Show>
             </li>
           </ul>

@@ -1,6 +1,6 @@
-import Link from "next/link";
 import { UserButton } from "@clerk/nextjs";
 import { currentUser } from "@clerk/nextjs/server";
+import { BrandLogo } from "@/components/ui/brand-logo";
 import { Card } from "@/components/ui/card";
 
 export default async function DashboardPage() {
@@ -11,28 +11,7 @@ export default async function DashboardPage() {
     <>
       <header className="sticky top-0 z-50 w-full bg-surface-black">
         <div className="mx-auto flex h-14 max-w-grid items-center justify-between px-6">
-          <Link
-            href="/"
-            className="flex items-center gap-2 rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-focus"
-          >
-            <span
-              aria-hidden="true"
-              className="flex h-6 w-6 items-center justify-center rounded-sm bg-primary"
-            >
-              <svg viewBox="0 0 16 16" fill="none" className="h-3.5 w-3.5">
-                <path
-                  d="M3 8.5L6 11.5L13 4"
-                  stroke="white"
-                  strokeWidth="1.8"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            </span>
-            <span className="text-(length:--type-button-utility-size) font-bold text-white">
-              Veriq
-            </span>
-          </Link>
+          <BrandLogo href="/" />
 
           <UserButton />
         </div>
