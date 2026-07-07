@@ -1,6 +1,6 @@
 ---
 name: auth
-description: Use for any work touching user identity — login flows, session management, route protection, role-based access control, resource ownership checks, OAuth setup, and the short-lived service tokens FastAPI validates. Next.js + next-auth v5.
+description: Use for any work touching user identity — login flows, session management, route protection, resource ownership checks, and the short-lived service tokens FastAPI validates. Next.js + Clerk.
 model: sonnet
 ---
 
@@ -8,11 +8,12 @@ model: sonnet
 > Runtime: Next.js · TypeScript
 
 ## When to Use This Agent
-Any work touching user identity: login flows, session management, route protection,
-role-based access control, resource ownership checks, or OAuth setup.
+Any work touching user identity: sign-in/sign-up flows, session management, route protection,
+resource ownership checks, or Clerk configuration (providers, redirect URLs, metadata/roles).
 
 This entire domain lives in Next.js. FastAPI services authenticate by validating the
-session token passed in the `Authorization` header from Next.js.
+short-lived service token passed in the `Authorization` header from Next.js — they never talk
+to Clerk directly.
 
 ---
 
@@ -21,11 +22,11 @@ Consult these skills (`.claude/skills/<name>/SKILL.md`) before and while working
 
 | Skill | Purpose |
 |---|---|
-| `typescript` | Types, session extension, role enums |
-| `nextjs` | Middleware, App Router, Server Actions |
-| `prisma` | Ownership-scoped queries, adapter model |
+| `typescript` | Types, metadata typing, discriminated unions |
+| `nextjs` | `proxy.ts` (not `middleware.ts`), App Router, Server Actions |
+| `prisma` | Ownership-scoped queries — key every table on Clerk's `userId` |
 | `api-contracts` | 404-not-403 envelope for ownership failures |
-| `security` | Cookie flags, token expiry, brute force protection |
+| `security` | Third-party-SDK production checks, CI secret hygiene, rate limiting |
 | `error-handling` | Auth failure handling, structured logging |
 | `engineering-standards` | Security/scalability/readability bar — applies to all output |
 
@@ -33,96 +34,146 @@ Consult these skills (`.claude/skills/<name>/SKILL.md`) before and while working
 
 ## Before You Start
 Only ask if the answer isn't already clear from the request or the existing codebase — don't
-ask what you can reasonably infer.
-- OAuth provider(s), credentials login, or both?
-- What roles does the app need, beyond any `Role` enum that already exists in the schema?
-- Does this touch an existing session/JWT shape, or is it new?
+ask what you can reasonably infer. Check `frontend/package.json` for `@clerk/nextjs` and
+`frontend/proxy.ts` (or `frontend/middleware.ts` on older Next majors) before assuming nothing
+is wired up yet.
+- Which routes actually need protection — is there an existing protected area (e.g. `/dashboard`)
+  to extend, or is this the first one?
+- Do Clerk's prebuilt `<SignIn />`/`<SignUp />` components cover the UI need, or is a fully custom
+  form required (`useSignIn`/`useSignUp` hooks)?
+- Does this need roles/permissions? Clerk stores that in `publicMetadata`, not a separate `Role`
+  column — confirm whether RBAC is actually in scope before adding it; it's commonly deferred as
+  a follow-up rather than bundled into initial auth setup.
 
 ---
 
 ## Task Protocol
-1. Clarify: OAuth providers, credentials, or both?
-2. Clarify: what roles does this app need?
-3. Implement auth provider + session config.
-4. Implement middleware guard for all protected routes.
-5. Implement per-resource ownership checks in API routes.
-6. Generate the session token format that FastAPI services will validate.
+1. Confirm `@clerk/nextjs` is installed and the root layout is wrapped in `<ClerkProvider>`.
+2. Add/extend `frontend/proxy.ts` (Next.js 16+) with `clerkMiddleware` + `createRouteMatcher` —
+   only call `auth.protect()` for routes that actually need it, not a blanket app-wide gate.
+3. Add dedicated `app/sign-in/[[...sign-in]]/page.tsx` and `app/sign-up/[[...sign-up]]/page.tsx`
+   if they don't exist.
+4. Wire the `NEXT_PUBLIC_CLERK_*` env vars (see Env & Redirects below) and update
+   `frontend/.env.example` — no real keys, and confirm `!.env.example` isn't accidentally
+   swept up by a blanket `.env*` gitignore rule.
+5. Add per-resource ownership checks in API routes, scoped to `auth().userId`.
+6. Generate the service-token format that FastAPI validates.
+7. **Before calling this done**: verify `next build && next start` (not just `next build`) with
+   no real Clerk keys set — see "The build-succeeded trap" below. If CI runs a production build,
+   confirm the two Clerk secrets are actually present as repo secrets under the exact names the
+   workflow reads, and that build-time and runtime steps both receive them.
 
 ---
 
-## Auth Stack: next-auth v5
+## Auth Stack: Clerk (`@clerk/nextjs`)
 
-```ts
-// lib/auth.ts
-import NextAuth from 'next-auth'
-import GitHub from 'next-auth/providers/github'
-import { PrismaAdapter } from '@auth/prisma-adapter'
-import { db } from '@/lib/db'
+```tsx
+// app/layout.tsx
+import { ClerkProvider } from "@clerk/nextjs";
 
-export const { handlers, auth, signIn, signOut } = NextAuth({
-  adapter: PrismaAdapter(db),
-  providers: [GitHub],
-  session: { strategy: 'jwt', maxAge: 60 * 60 * 24 * 7 }, // 7d
-  callbacks: {
-    jwt({ token, user }) {
-      if (user) {
-        token.id = user.id
-        token.role = user.role
-      }
-      return token
-    },
-    session({ session, token }) {
-      session.user.id = token.id as string
-      session.user.role = token.role as Role
-      return session
-    },
-  },
-  pages: { signIn: '/login', error: '/login' },
-})
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <ClerkProvider afterSignOutUrl="/">
+      <html lang="en">
+        <body>{children}</body>
+      </html>
+    </ClerkProvider>
+  );
+}
 ```
 
-## Middleware Guard
-
 ```ts
-// middleware.ts — runs before every matched request
-import { auth } from '@/lib/auth'
-import { NextResponse } from 'next/server'
+// proxy.ts — Next.js 16 renamed the middleware file convention to `proxy.ts`.
+// `middleware.ts` still works but is deprecated (build prints a warning on every run).
+// Only files at this exact repo root are picked up — see the `nextjs` skill.
+import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 
-export default auth((req) => {
-  const authed = !!req.auth
-  const appRoute = req.nextUrl.pathname.startsWith('/app')
-  // FastAPI routes are internal — only Next.js public API needs guarding here
-  const apiRoute = req.nextUrl.pathname.startsWith('/api') &&
-    !req.nextUrl.pathname.startsWith('/api/auth')
+const isProtectedRoute = createRouteMatcher(["/dashboard(.*)"]);
 
-  if ((appRoute || apiRoute) && !authed) {
-    return NextResponse.redirect(new URL('/login', req.url))
+const proxy = clerkMiddleware(async (auth, req) => {
+  if (isProtectedRoute(req)) {
+    await auth.protect(); // redirects to sign-in when unauthenticated
   }
-})
+});
 
-export const config = { matcher: ['/app/:path*', '/api/:path*'] }
+export default proxy;
+
+export const config = {
+  matcher: [
+    "/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico)).*)",
+    "/(api|trpc)(.*)",
+  ],
+};
 ```
+
+```tsx
+// app/sign-in/[[...sign-in]]/page.tsx — catch-all route, Clerk's own prebuilt UI
+import { SignIn } from "@clerk/nextjs";
+export default function Page() {
+  return <SignIn />;
+}
+```
+
+```tsx
+// Conditional nav UI — Show/UserButton, NOT SignedIn/SignedOut (removed in @clerk/nextjs 7.x)
+import { Show, UserButton } from "@clerk/nextjs";
+
+<Show when="signed-out" fallback={<UserButton />}>
+  <Link href="/sign-in">Sign in</Link>
+</Show>
+```
+
+## Env & Redirects
+Clerk's Next.js SDK auto-reads these — no need to thread them through `<ClerkProvider>` props:
+```
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=
+CLERK_SECRET_KEY=
+NEXT_PUBLIC_CLERK_SIGN_IN_URL=/sign-in
+NEXT_PUBLIC_CLERK_SIGN_UP_URL=/sign-up
+NEXT_PUBLIC_CLERK_SIGN_IN_FORCE_REDIRECT_URL=/dashboard
+NEXT_PUBLIC_CLERK_SIGN_UP_FORCE_REDIRECT_URL=/dashboard
+```
+`afterSignOutUrl` is a `<ClerkProvider>` prop, not a `<UserButton>` prop — it was removed from
+`UserButtonProps` in `@clerk/nextjs` 7.x. Passing it to `<UserButton>` is a type error.
+
+## The build-succeeded trap
+`next build` succeeds with **zero** Clerk env vars set — the SDK degrades gracefully at build
+time. That tells you nothing about runtime. `next start` (production mode) throws
+`Missing publishableKey` and **500s on every single request** without real keys, because Clerk's
+zero-config "keyless mode" only activates in `next dev` (gated by
+`isDevelopmentEnvironment() && !isAutomatedEnvironment()`) — it is deliberately disabled in
+production and in CI. If a Playwright/e2e job runs `npm run build` then `npm run start`, that job
+needs real Clerk test-instance keys as CI secrets, or every test fails with the app 500ing before
+Playwright's assertions ever run. Verify this locally with `CI=true npm run build && CI=true npm
+run start` before assuming "build passed" means the feature works. When wiring CI secrets, name
+the GitHub Actions secret **identically** to the runtime env var — a translation layer between
+secret name and env var name is exactly the kind of mismatch that only surfaces after a push.
 
 ## FastAPI Service Authentication
 
-Next.js issues a short-lived JWT that FastAPI validates on every request.
+Next.js issues a short-lived JWT that FastAPI validates on every request — get the userId from
+Clerk's `auth()`, not from a next-auth session object.
 
 ```ts
 // lib/service-token.ts — Next.js generates this for internal service calls
-import { SignJWT } from 'jose'
+import { auth } from "@clerk/nextjs/server";
+import { SignJWT } from "jose";
 
-export async function createServiceToken(userId: string, role: string) {
-  return new SignJWT({ sub: userId, role })
-    .setProtectedHeader({ alg: 'HS256' })
-    .setExpirationTime('5m')  // short-lived, internal use only
-    .sign(new TextEncoder().encode(process.env.INTERNAL_JWT_SECRET))
+export async function createServiceToken() {
+  const { userId } = await auth();
+  if (!userId) throw new Error("Unauthorized");
+
+  return new SignJWT({ sub: userId })
+    .setProtectedHeader({ alg: "HS256" })
+    .setExpirationTime("5m") // short-lived, internal use only
+    .sign(new TextEncoder().encode(process.env.INTERNAL_JWT_SECRET));
 }
 
 // Usage: attach to outbound fetch calls to FastAPI
-const token = await createServiceToken(session.user.id, session.user.role)
+const token = await createServiceToken();
 const res = await fetch(`${process.env.FASTAPI_URL}/process`, {
   headers: { Authorization: `Bearer ${token}` },
-})
+});
 ```
 
 ## Resource Ownership Pattern
@@ -132,59 +183,55 @@ const res = await fetch(`${process.env.FASTAPI_URL}/process`, {
 const invoice = await db.invoice.findUnique({ where: { id } })
 
 // CORRECT — scoped to authenticated user
+const { userId } = await auth();
 const invoice = await db.invoice.findUnique({
-  where: { id, userId: session.user.id },
+  where: { id, userId },
   select: { id: true, total: true, status: true },
 })
 if (!invoice) return ApiError.notFound() // 404, not 403
 ```
 
-## Role Guard
+## Role/Permission Guard (only if RBAC is actually in scope)
+Clerk stores roles in `publicMetadata`, not a separate `Role` column — check with `has()` rather
+than inventing a parallel authorization system. Confirm RBAC is actually requested before adding
+this; it's commonly explicit *out of scope* for an initial auth setup.
 
 ```ts
-// lib/permissions.ts
-export type Role = 'user' | 'admin' | 'owner'
-
-export function assertRole(session: Session, required: Role) {
-  if (session.user.role !== required) throw new ForbiddenError()
-}
-
-// Usage in route handler (after auth check)
-assertRole(session, 'admin')
+// Set publicMetadata.role via Clerk's dashboard or backend API, then:
+const { has } = await auth();
+if (!has({ role: "org:admin" })) throw new ForbiddenError();
 ```
 
-## Type Extension
-
 ```ts
-// types/next-auth.d.ts
-import 'next-auth'
-import type { Role } from '@/lib/permissions'
-
-declare module 'next-auth' {
-  interface User { role: Role }
-  interface Session { user: User & { id: string } }
-}
-declare module 'next-auth/jwt' {
-  interface JWT { id: string; role: Role }
+// types/globals.d.ts — type the custom metadata shape once
+export {};
+declare global {
+  interface CustomJwtSessionClaims {
+    metadata: { role?: "admin" | "user" };
+  }
 }
 ```
 
 ## Security Rules
-- Never store passwords in plaintext. Hash with `bcryptjs`, 12 rounds minimum.
-- Session cookies: `httpOnly`, `secure` (prod), `sameSite: lax`.
-- JWT payload: `userId` + `role` only — no email, no PII, no secrets.
-- Rate limit `/api/auth/callback/credentials` against brute force.
-- Re-authenticate before sensitive operations (delete account, change email, payment).
+- Never hand-roll session cookie logic — Clerk's SDK owns cookie creation, rotation, and
+  `httpOnly`/`Secure`/`SameSite` flags entirely. The cookie-flag guidance in the `security` skill
+  applies to first-party cookies your own code sets (e.g. CSRF state), not the Clerk session.
+- JWT payload for the FastAPI service token: `userId` only — no email, no PII, no secrets.
+- Re-authenticate before sensitive operations using Clerk's reverification, not a custom prompt.
 - 404 for ownership failures — never 403 (information leak).
-- Log all auth failures server-side: `{ ip, email, reason, timestamp }`.
+- Log auth-gated resource access failures server-side: `{ userId, resource, reason, timestamp }`.
+- Never let a third-party auth SDK's happy path (`next build`) stand in for verifying its actual
+  failure mode (`next start` / CI without secrets) — see "The build-succeeded trap" above.
 
 ## Audit Checklist
-- [ ] Session validated before any data access
-- [ ] Resource queries scoped to `session.user.id`
-- [ ] Role checks on admin-only operations
-- [ ] Cookie flags: httpOnly, secure, sameSite
-- [ ] No PII in JWT payload
-- [ ] Rate limit on credentials login endpoint
-- [ ] Service tokens short-lived (<10min) for FastAPI calls
+- [ ] `<ClerkProvider>` wraps the root layout
+- [ ] `proxy.ts` (not the deprecated `middleware.ts`) protects only the routes that need it
+- [ ] Resource queries scoped to `auth().userId` — no bare ID lookups
+- [ ] `afterSignOutUrl` set on `<ClerkProvider>`, not `<UserButton>`
+- [ ] `frontend/.env.example` documents required vars with no real keys, and is actually
+      committable (`!.env.example` exception present, not swallowed by `.env*`)
+- [ ] If CI builds/runs the app in production mode, real Clerk secrets are wired under the exact
+      names the workflow reads
+- [ ] No PII in the FastAPI service-token payload
 - [ ] Re-auth required for destructive account actions
 - [ ] Passes the `engineering-standards` Definition of Done

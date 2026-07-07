@@ -30,6 +30,10 @@ class CreateInvoiceRequest(BaseModel):
 ---
 
 ## Authentication Cookies (Next.js)
+This repo's frontend uses Clerk (`@clerk/nextjs`) for the user session — Clerk's SDK owns
+cookie creation, rotation, and flags entirely; never hand-roll `Set-Cookie` logic for the
+session itself. The flags below apply to any *other* first-party cookie your own code sets
+(e.g. CSRF state, feature flags):
 ```
 Set-Cookie: session=...; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=604800
 ```
@@ -118,13 +122,16 @@ CORSMiddleware(
 // lib/env.ts
 const EnvSchema = z.object({
   DATABASE_URL: z.string().url(),
-  NEXTAUTH_SECRET: z.string().min(32),
+  CLERK_SECRET_KEY: z.string().min(1),
+  NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: z.string().min(1),
   ANTHROPIC_API_KEY: z.string().startsWith('sk-ant-'),
   INTERNAL_JWT_SECRET: z.string().min(32),
   FASTAPI_URL: z.string().url(),
 })
 export const env = EnvSchema.parse(process.env)
 ```
+This only guards `next dev`/`next start` where `lib/env.ts` actually executes. It does **not**
+guard `next build` — see "Third-Party SDK Production Verification" below for the gap that leaves.
 
 ### FastAPI
 ```python
@@ -134,6 +141,27 @@ class Settings(BaseSettings):
     INTERNAL_JWT_SECRET: str
     ANTHROPIC_API_KEY: str
 ```
+
+---
+
+## Third-Party SDK Production Verification
+
+Some SDKs (Clerk is the concrete example here) validate required config lazily, at
+request-handling time, not at build time. `next build` succeeding proves the code compiles —
+it proves nothing about whether the app can serve a single request in production. Clerk's
+`ClerkProvider`/`clerkMiddleware` throw `Missing publishableKey` and 500 on **every request**
+under `next start` without real keys, because its zero-config "keyless mode" is deliberately
+dev-only (`next dev`) and disabled in production and CI.
+
+Before calling any such integration done:
+- Run the actual production path locally: `CI=true npm run build && CI=true npm run start`,
+  then hit a route — not just `npm run build`.
+- If a CI workflow runs a production build/start (e.g. an e2e job), confirm the required
+  secrets are wired as repo secrets under the **exact** names the workflow reads. A secret
+  named differently than the env var the workflow maps it to is a silent, easy-to-miss failure
+  mode — prefer naming the GitHub Actions secret identically to the runtime env var.
+- Consider a preflight CI step that fails fast with a clear message if a required secret is
+  empty, rather than letting the app 500 in a loop until the job times out.
 
 ---
 
@@ -172,6 +200,9 @@ treat them as required, not optional.
   scans/minutes on paid third-party actions)
 □ `timeout-minutes` set on every job so a hung step can't burn CI time
   indefinitely
+□ Env vars sourced from `${{ secrets.X }}` are named identically to the repo
+  secret they read — a translation layer between secret name and consumed
+  var name is an easy, silent way to ship a workflow that always fails
 ```
 
 ### Git hooks (Husky, pre-commit, etc.)
@@ -198,7 +229,11 @@ treat them as required, not optional.
 ```text
 □ .gitignore covers key/cert/credential file patterns: *.pem, *.key, *.p12,
   *.pfx, *.crt, *credentials*.json, *service-account*.json
-□ All `.env*` variants ignored except `.env.example` / `.env.*.example`
+□ All `.env*` variants ignored except `.env.example` / `.env.*.example` —
+  verify the exception actually works with `git check-ignore -v path/to/.env.example`.
+  A blanket `.env*` rule with no `!.env.example` negation silently blocks the
+  template from ever being committed, which looks like "it's fine, nothing's
+  tracked" right up until someone needs the template and it isn't there
 □ .gitignore is a backstop, not a control — pair it with a CI secret
   scanner (e.g. GitGuardian) gating every PR, since a file can be committed
   before a rule exists or a secret can land inside a tracked file
@@ -210,7 +245,7 @@ treat them as required, not optional.
 | Purpose | Next.js | FastAPI |
 |---|---|---|
 | Validation | `zod` | `pydantic` |
-| Auth | `next-auth` v5 | `python-jose` |
+| Auth | Clerk (`@clerk/nextjs`) | `python-jose` |
 | Rate limit | `@upstash/ratelimit` | `slowapi` |
 | Password hash | `bcryptjs` (12 rounds) | `passlib[bcrypt]` |
 | Token sign/verify | `jose` | `python-jose` |

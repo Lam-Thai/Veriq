@@ -25,6 +25,10 @@ class CreateInvoiceRequest(BaseModel):
 ---
 
 ## Authentication Cookies (Next.js)
+This repo's frontend uses Clerk (`@clerk/nextjs`) for the user session — Clerk's SDK owns
+cookie creation, rotation, and flags entirely; never hand-roll `Set-Cookie` logic for the
+session itself. The flags below apply to any *other* first-party cookie your own code sets
+(e.g. CSRF state, feature flags):
 ```
 Set-Cookie: session=...; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=604800
 ```
@@ -113,13 +117,16 @@ CORSMiddleware(
 // lib/env.ts
 const EnvSchema = z.object({
   DATABASE_URL: z.string().url(),
-  NEXTAUTH_SECRET: z.string().min(32),
+  CLERK_SECRET_KEY: z.string().min(1),
+  NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: z.string().min(1),
   ANTHROPIC_API_KEY: z.string().startsWith('sk-ant-'),
   INTERNAL_JWT_SECRET: z.string().min(32),
   FASTAPI_URL: z.string().url(),
 })
 export const env = EnvSchema.parse(process.env)
 ```
+This only guards `next dev`/`next start` where `lib/env.ts` actually executes. It does **not**
+guard `next build` — see "Third-Party SDK Production Verification" below for the gap that leaves.
 
 ### FastAPI
 ```python
@@ -132,17 +139,108 @@ class Settings(BaseSettings):
 
 ---
 
+## Third-Party SDK Production Verification
+
+Some SDKs (Clerk is the concrete example here) validate required config lazily, at
+request-handling time, not at build time. `next build` succeeding proves the code compiles —
+it proves nothing about whether the app can serve a single request in production. Clerk's
+`ClerkProvider`/`clerkMiddleware` throw `Missing publishableKey` and 500 on **every request**
+under `next start` without real keys, because its zero-config "keyless mode" is deliberately
+dev-only (`next dev`) and disabled in production and CI.
+
+Before calling any such integration done:
+- Run the actual production path locally: `CI=true npm run build && CI=true npm run start`,
+  then hit a route — not just `npm run build`.
+- If a CI workflow runs a production build/start (e.g. an e2e job), confirm the required
+  secrets are wired as repo secrets under the **exact** names the workflow reads. A secret
+  named differently than the env var the workflow maps it to is a silent, easy-to-miss failure
+  mode — prefer naming the GitHub Actions secret identically to the runtime env var.
+- Consider a preflight CI step that fails fast with a clear message if a required secret is
+  empty, rather than letting the app 500 in a loop until the job times out.
+
+---
+
 ## File Upload Security
 - Validate `content_type` against allowlist.
 - Validate magic bytes — never trust the `Content-Type` header alone.
 - Enforce size limits before reading into memory.
 - Derive storage keys from hash — never use the client's filename directly.
 
+---
+
+## CI/CD & Supply-Chain Security
+
+Applies to anything under `.github/workflows/` and any git hook (Husky, pre-commit).
+These are the patterns this repo's workflows (`gitguardian.yml`, `codeql.yml`,
+`playwright.yml`) and `.husky/pre-push` were built and CodeRabbit-reviewed against —
+treat them as required, not optional.
+
+### GitHub Actions workflows
+
+```text
+□ Third-party actions pinned to a full commit SHA, not a mutable tag/branch
+    uses: GitGuardian/ggshield-action@da20be0...30b # v1.52.2  ← SHA first, tag as a comment
+□ Top-level `permissions: contents: read`; broaden only on the specific job
+  that needs it (e.g. `security-events: write` for SARIF upload), with a
+  comment explaining why
+□ `actions/checkout` sets `persist-credentials: false` unless the job
+  actually needs to push
+□ Trigger on `pull_request`, never `pull_request_target`, for anything that
+  checks out and runs untrusted fork code or has secrets in scope
+□ A step that needs a secret is guarded so it no-ops (not fails) on forked
+  PRs, where the secret is never available:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+□ `concurrency: { group: <workflow>-<pr>, cancel-in-progress: true }` so
+  superseded pushes don't stack redundant/racing runs (also avoids wasted
+  scans/minutes on paid third-party actions)
+□ `timeout-minutes` set on every job so a hung step can't burn CI time
+  indefinitely
+□ Env vars sourced from `${{ secrets.X }}` are named identically to the repo
+  secret they read — a translation layer between secret name and consumed
+  var name is an easy, silent way to ship a workflow that always fails
+```
+
+### Git hooks (Husky, pre-commit, etc.)
+
+```text
+□ No remote-fetch-and-execute pattern anywhere in the hook or its scripts —
+  no `curl ... | sh`, no `wget` piped into a shell, no dynamically fetched
+  script. Only invoke locally installed, version-controlled tooling.
+□ Every path/variable expansion in the hook script is double-quoted
+  ("$var", not $var) — hooks run with the developer's full shell privileges
+□ The hook script itself (e.g. `.husky/pre-push`) is committed and reviewed
+  like any other code; generated wrapper machinery (e.g. `.husky/_/`) is
+  regenerated by the `prepare` script and self-gitignored — never hand-edit
+  or commit it
+□ On failure: exit non-zero, print which check failed and how to fix it
+  (e.g. the exact command to set up a missing local environment) — a
+  swallowed or unclear failure just trains developers to `--no-verify`
+□ Document the intentional escape hatch (`git push --no-verify`) rather than
+  leaving developers to discover it under pressure
+```
+
+### Secret hygiene
+
+```text
+□ .gitignore covers key/cert/credential file patterns: *.pem, *.key, *.p12,
+  *.pfx, *.crt, *credentials*.json, *service-account*.json
+□ All `.env*` variants ignored except `.env.example` / `.env.*.example` —
+  verify the exception actually works with `git check-ignore -v path/to/.env.example`.
+  A blanket `.env*` rule with no `!.env.example` negation silently blocks the
+  template from ever being committed, which looks like "it's fine, nothing's
+  tracked" right up until someone needs the template and it isn't there
+□ .gitignore is a backstop, not a control — pair it with a CI secret
+  scanner (e.g. GitGuardian) gating every PR, since a file can be committed
+  before a rule exists or a secret can land inside a tracked file
+```
+
+---
+
 ## Toolbelt Summary
 | Purpose | Next.js | FastAPI |
 |---|---|---|
 | Validation | `zod` | `pydantic` |
-| Auth | `next-auth` v5 | `python-jose` |
+| Auth | Clerk (`@clerk/nextjs`) | `python-jose` |
 | Rate limit | `@upstash/ratelimit` | `slowapi` |
 | Password hash | `bcryptjs` (12 rounds) | `passlib[bcrypt]` |
 | Token sign/verify | `jose` | `python-jose` |

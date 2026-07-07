@@ -51,37 +51,41 @@ export const getUser = cache(async (id: string) => db.user.findUnique({ where: {
 ## Server Actions (mutations)
 ```ts
 'use server'
-import { auth } from '@/lib/auth'
+import { auth } from '@clerk/nextjs/server'
 import { revalidatePath } from 'next/cache'
 
 export async function createInvoice(formData: FormData) {
-  const session = await auth()
-  if (!session) throw new Error('Unauthorized')  // auth first
+  const { userId } = await auth()
+  if (!userId) throw new Error('Unauthorized')  // auth first
 
   const parsed = InvoiceSchema.safeParse(Object.fromEntries(formData))
   if (!parsed.success) return { error: parsed.error.flatten() }
 
-  await db.invoice.create({ data: { ...parsed.data, userId: session.user.id } })
-  revalidatePath('/app/invoices')
+  await db.invoice.create({ data: { ...parsed.data, userId } })
+  revalidatePath('/dashboard/invoices')
 }
 ```
 
-## Middleware
+## Middleware / Proxy
+Next.js 16 renamed the `middleware.ts` file convention to `proxy.ts` (and the exported function
+to `proxy`) — `middleware.ts` still works but is deprecated and prints a build-time warning on
+every run. Use `proxy.ts` in new work; only rename an existing `middleware.ts` as its own change,
+not bundled silently into an unrelated diff.
+
 ```ts
-// middleware.ts
-import { auth } from '@/lib/auth'
+// proxy.ts — auth guard via the auth agent's Clerk stack
+import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
 
-export default auth((req) => {
-  const authed = !!req.auth
-  const appRoute = req.nextUrl.pathname.startsWith('/app')
-  const apiRoute = req.nextUrl.pathname.startsWith('/api') &&
-    !req.nextUrl.pathname.startsWith('/api/auth')
+const isProtectedRoute = createRouteMatcher(['/dashboard(.*)'])
 
-  if ((appRoute || apiRoute) && !authed) {
-    return NextResponse.redirect(new URL('/login', req.url))
+const proxy = clerkMiddleware(async (auth, req) => {
+  if (isProtectedRoute(req)) {
+    await auth.protect()
   }
 })
-export const config = { matcher: ['/app/:path*', '/api/:path*'] }
+
+export default proxy
+export const config = { matcher: ['/((?!_next|.*\\..*).*)', '/(api|trpc)(.*)'] }
 ```
 
 ## Security Headers (next.config.ts)
@@ -100,3 +104,7 @@ export default { async headers() { return [{ source: '/(.*)', headers: securityH
 - `loading.tsx` at every route fetching async data
 - `error.tsx` at every route — never let raw errors reach the user
 - Avoid client-side `fetch('/api/...')` when Server Action or RSC fetch works
+- Any internal path link uses `next/link`'s `Link`, never a raw `<a href="/...">` — ESLint's
+  `@next/next/no-html-link-for-pages` fails the build otherwise. Fragment/external hrefs (`#`,
+  `https://...`) are fine as plain `<a>`.
+- New middleware work goes in `proxy.ts`, not `middleware.ts` (see Middleware / Proxy above)
