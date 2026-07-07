@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
+import { Show, UserButton } from "@clerk/nextjs";
 import { cn } from "@/lib/cn";
 import { CloseIcon, MenuIcon } from "@/components/ui/icons";
 import { NAV_LINKS } from "@/components/landing/nav-links";
@@ -52,6 +54,31 @@ export function MobileNavMenu() {
                 </a>
               </li>
             ))}
+            <li>
+              <Show
+                when="signed-out"
+                fallback={
+                  <div className="flex items-center gap-2 px-2 py-2.5">
+                    <UserButton />
+                    <span className="text-(length:--type-button-utility-size) font-normal text-white/80">
+                      Account
+                    </span>
+                  </div>
+                }
+              >
+                <Link
+                  href="/sign-in"
+                  onClick={() => setIsOpen(false)}
+                  className={cn(
+                    "block rounded-sm px-2 py-2.5 text-(length:--type-button-utility-size) font-normal text-white/80",
+                    "transition-colors duration-(--duration-fast) hover:text-white",
+                    "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-focus",
+                  )}
+                >
+                  Sign in
+                </Link>
+              </Show>
+            </li>
           </ul>
         </div>
       )}

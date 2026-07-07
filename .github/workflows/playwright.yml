@@ -33,6 +33,18 @@ jobs:
           cache: "npm"
           cache-dependency-path: frontend/package-lock.json
 
+      - name: Verify Clerk secrets are configured
+        env:
+          CHECK_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+          CHECK_CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
+        run: |
+          if [ -z "$CHECK_CLERK_PUBLISHABLE_KEY" ] || [ -z "$CHECK_CLERK_SECRET_KEY" ]; then
+            echo "::error::Missing required repo secrets NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY and/or CLERK_SECRET_KEY."
+            echo "::error::The app is wrapped in Clerk's ClerkProvider/clerkMiddleware, which require real API keys in production mode (this workflow runs 'npm run build' + 'npm run start')."
+            echo "::error::Add both secrets under Settings -> Secrets and variables -> Actions using a free Clerk test instance. See README.md#ci-end-to-end-tests for the exact steps."
+            exit 1
+          fi
+
       - name: Install dependencies
         run: npm ci
 
@@ -41,11 +53,24 @@ jobs:
 
       - name: Build frontend
         run: npm run build
+        env:
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+          CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
+          NEXT_PUBLIC_CLERK_SIGN_IN_URL: /sign-in
+          NEXT_PUBLIC_CLERK_SIGN_UP_URL: /sign-up
+          NEXT_PUBLIC_CLERK_SIGN_IN_FORCE_REDIRECT_URL: /dashboard
+          NEXT_PUBLIC_CLERK_SIGN_UP_FORCE_REDIRECT_URL: /dashboard
 
       - name: Run Playwright e2e suite
         run: npm run test:e2e
         env:
           CI: true
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+          CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
+          NEXT_PUBLIC_CLERK_SIGN_IN_URL: /sign-in
+          NEXT_PUBLIC_CLERK_SIGN_UP_URL: /sign-up
+          NEXT_PUBLIC_CLERK_SIGN_IN_FORCE_REDIRECT_URL: /dashboard
+          NEXT_PUBLIC_CLERK_SIGN_UP_FORCE_REDIRECT_URL: /dashboard
 
       - name: Upload Playwright report
         if: ${{ !cancelled() }}
