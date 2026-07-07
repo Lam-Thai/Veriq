@@ -165,6 +165,6 @@ Tests live under `frontend/e2e/` and are configured in `frontend/playwright.conf
 
 1. Create a free Clerk application (or reuse an existing test instance) at the [Clerk dashboard](https://dashboard.clerk.com).
 2. In GitHub, go to **Settings → Secrets and variables → Actions → New repository secret**.
-3. Add `CLERK_PUBLISHABLE_KEY` (the `pk_test_...` value) and `CLERK_SECRET_KEY` (the `sk_test_...` value).
+3. Add `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` (the `pk_test_...` value) and `CLERK_SECRET_KEY` (the `sk_test_...` value) — names must match exactly, since the workflow reads them by name.
 
 Use test-mode keys only — never a production Clerk instance's keys — since this workflow runs on every pull request, including from anyone with write access to the repo.
