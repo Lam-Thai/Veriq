@@ -97,6 +97,7 @@ backend/    FastAPI (Python 3.12+) — health check + scaffold for future routes
 ```
 cd frontend
 npm install
+cp .env.example .env.local   # fill in Clerk API keys — see frontend/README.md
 npm run dev      # http://localhost:3000
 
 npx playwright install --with-deps chromium   # first time only
@@ -159,3 +160,11 @@ The workflow only runs on `pull_request` (never `pull_request_target`), so the s
 Every pull request runs the Playwright e2e suite (`.github/workflows/playwright.yml`) against a production build of the frontend. The workflow installs dependencies and Chromium reproducibly (`npm ci`, `npx playwright install --with-deps chromium`), builds the app (`npm run build`), then runs `npm run test:e2e`. The HTML report is uploaded as a build artifact on every run except when the job is cancelled, so both passing and failing runs can be inspected.
 
 Tests live under `frontend/e2e/` and are configured in `frontend/playwright.config.ts`. Add new smoke/e2e specs there as coverage grows.
+
+**Required secrets:** the frontend is wrapped in Clerk's `ClerkProvider`/`clerkMiddleware`, which throw on every request in production mode (`next start`, used by this workflow) unless given real API keys — Clerk's zero-config "keyless mode" only works in local `next dev`. Without these secrets, the workflow fails on every PR:
+
+1. Create a free Clerk application (or reuse an existing test instance) at the [Clerk dashboard](https://dashboard.clerk.com).
+2. In GitHub, go to **Settings → Secrets and variables → Actions → New repository secret**.
+3. Add `CLERK_PUBLISHABLE_KEY` (the `pk_test_...` value) and `CLERK_SECRET_KEY` (the `sk_test_...` value).
+
+Use test-mode keys only — never a production Clerk instance's keys — since this workflow runs on every pull request, including from anyone with write access to the repo.

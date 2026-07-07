@@ -21,7 +21,15 @@ backend/.env
 *.crt
 *credentials*.json
 *service-account*.json
+
+# env files at any depth (root .env, frontend/.env.local, backend/.env, etc.) —
+# these hold real API keys (Clerk, GitGuardian, ...); only .env.example variants are safe to commit
 .env
 .env.*
 !.env.example
 !.env.*.example
+
+# belt-and-suspenders: name the two files this repo actually uses today, in case the
+# wildcard rule above is ever narrowed or removed without someone re-checking this list
+/.env
+/frontend/.env.local

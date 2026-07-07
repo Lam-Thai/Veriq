@@ -1,3 +1,5 @@
+import Link from "next/link";
+import { Show, UserButton } from "@clerk/nextjs";
 import { PillButton } from "@/components/ui/pill-button";
 import { NAV_LINKS } from "@/components/landing/nav-links";
 import { MobileNavMenu } from "@/components/landing/mobile-nav-menu";
@@ -51,7 +53,22 @@ export function Nav() {
           ))}
         </ul>
 
-        <div className="hidden md:block">
+        <div className="hidden items-center gap-4 md:flex">
+          <Show when="signed-out">
+            <Link
+              href="/sign-in"
+              className={cn(
+                "text-(length:--type-nav-link-size)/(--type-nav-link-lh) tracking-(--type-nav-link-ls) text-white/70",
+                "transition-colors duration-(--duration-fast) hover:text-white",
+                "rounded-xs focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-focus",
+              )}
+            >
+              Sign in
+            </Link>
+          </Show>
+          <Show when="signed-in">
+            <UserButton />
+          </Show>
           <PillButton as="a" href="#" variant="primary" size="compact">
             Generate Report
           </PillButton>

@@ -2,6 +2,14 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 
 ## Getting Started
 
+Authentication is handled by [Clerk](https://clerk.com). Copy the env template and fill in your
+Clerk API keys (from the [Clerk dashboard](https://dashboard.clerk.com/last-active?path=api-keys))
+before running the app:
+
+```bash
+cp .env.example .env.local
+```
+
 First, run the development server:
 
 ```bash
