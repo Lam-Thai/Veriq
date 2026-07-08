@@ -47,6 +47,13 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+        env:
+          # `npm ci` runs the `postinstall` hook (`prisma generate`), which requires
+          # DATABASE_URL/DIRECT_URL to be *present* (Prisma 7's config loader throws
+          # if they're unset) but never connects — generation is schema-to-code only.
+          # A placeholder is sufficient; this is not a real secret.
+          DATABASE_URL: "postgresql://ci:ci@localhost:5432/ci_placeholder"
+          DIRECT_URL: "postgresql://ci:ci@localhost:5432/ci_placeholder"
 
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium

@@ -1,0 +1,19 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  // Prisma 7 removed `url`/`directUrl` from the schema file — connection URLs now
+  // live in prisma.config.ts (for the CLI/migration engine) and are passed directly
+  // to the driver adapter in lib/db.ts (for the app's runtime client). See:
+  // https://pris.ly/d/config-datasource
+}
+
+// No models yet — this issue only stands up the database connection itself.
+// Per-user schema (platform connections, verified income records) is scoped
+// to a separate, dedicated persistence-layer sub-issue for the dashboard.
