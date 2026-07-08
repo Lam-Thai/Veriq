@@ -1,7 +1,7 @@
 ---
 title: Apply Principle of Least Privilege
 impact: MEDIUM
-impactDescription: Reduced attack surface, better audit trail
+impactDescription: Confines a compromised credential's reach from 100% of the schema to only its explicitly granted tables
 tags: privileges, security, roles, permissions
 ---
 

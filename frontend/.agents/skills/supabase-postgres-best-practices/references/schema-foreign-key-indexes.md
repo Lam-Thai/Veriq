@@ -53,6 +53,7 @@ where c.contype = 'f'
   and not exists (
     select 1 from pg_index i
     where i.indrelid = c.conrelid and a.attnum = any(i.indkey)
+      and i.indpred is null  -- exclude partial indexes: they may not cover every row
   );
 ```
 

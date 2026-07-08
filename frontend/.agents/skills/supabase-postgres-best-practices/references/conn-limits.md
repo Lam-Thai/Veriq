@@ -1,7 +1,7 @@
 ---
 title: Set Appropriate Connection Limits
 impact: CRITICAL
-impactDescription: Prevent database crashes and memory exhaustion
+impactDescription: 500 unbounded connections can consume 1GB+ in overhead alone, causing OOM crashes
 tags: connections, max-connections, limits, stability
 ---
 

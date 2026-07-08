@@ -42,14 +42,18 @@ order by rank desc;
 Search multiple terms:
 
 ```sql
+-- Always pass the config explicitly — to_tsquery() otherwise falls back to
+-- default_text_search_config, which is deterministic per-database but can
+-- differ across environments/deployments.
+
 -- AND: both terms required
-to_tsquery('postgresql & performance')
+to_tsquery('english', 'postgresql & performance')
 
 -- OR: either term
-to_tsquery('postgresql | mysql')
+to_tsquery('english', 'postgresql | mysql')
 
 -- Prefix matching
-to_tsquery('post:*')
+to_tsquery('english', 'post:*')
 ```
 
 Reference: [Full Text Search](https://supabase.com/docs/guides/database/full-text-search)

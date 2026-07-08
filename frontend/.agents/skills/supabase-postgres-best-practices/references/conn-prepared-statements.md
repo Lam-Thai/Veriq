@@ -1,7 +1,7 @@
 ---
 title: Use Prepared Statements Correctly with Pooling
 impact: HIGH
-impactDescription: Avoid prepared statement conflicts in pooled environments
+impactDescription: Eliminates "prepared statement does not exist" errors on every request under transaction-mode pooling
 tags: prepared-statements, connection-pooling, transaction-mode
 ---
 

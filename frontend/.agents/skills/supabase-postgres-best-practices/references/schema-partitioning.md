@@ -20,7 +20,8 @@ create table events (
 
 -- 500M rows, queries scan everything
 select * from events where created_at > '2024-01-01';  -- Slow
-vacuum events;  -- Takes hours, locks table
+vacuum events;  -- Takes hours to scan; doesn't block normal reads/writes
+                -- (VACUUM FULL would — it rewrites the table under an exclusive lock)
 ```
 
 **Correct (partitioned by time range):**
