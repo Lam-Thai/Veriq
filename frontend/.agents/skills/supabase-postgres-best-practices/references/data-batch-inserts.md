@@ -38,17 +38,19 @@ insert into events (user_id, action) values
 For large imports, use COPY:
 
 ```sql
--- COPY is fastest for bulk loading
-copy events (user_id, action, created_at)
-from '/path/to/data.csv'
-with (format csv, header true);
-
--- Or from stdin in application
-copy events (user_id, action) from stdin with (format csv);
-1,click
-1,view
-2,click
+-- COPY is fastest for bulk loading. On hosted Postgres (e.g. Supabase) the
+-- server has no access to your local filesystem — load via STDIN, not a
+-- server-side file path.
+copy events (user_id, action, created_at) from stdin with (format csv, header true);
+1,click,2024-01-01
+1,view,2024-01-01
+2,click,2024-01-01
 \.
+
+-- psql's \copy is the client-side equivalent for a local file: it reads the
+-- file on your machine and streams it over STDIN for you, so it works
+-- against a hosted database too (unlike server-side COPY ... FROM '/path'):
+\copy events (user_id, action, created_at) from '/path/to/data.csv' with (format csv, header true)
 ```
 
 Reference: [COPY](https://www.postgresql.org/docs/current/sql-copy.html)

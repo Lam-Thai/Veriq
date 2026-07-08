@@ -48,8 +48,16 @@ alter table orders set (
   autovacuum_analyze_scale_factor = 0.02     -- Analyze at 2% changes (default 10%)
 );
 
--- Check autovacuum status
-select * from pg_stat_progress_vacuum;
+-- Check autovacuum status. pg_stat_progress_vacuum only shows vacuums that
+-- are actively running right now, so it's empty most of the time — use the
+-- persistent per-table stats instead for ongoing status/history:
+select
+  relname,
+  n_dead_tup,
+  last_autovacuum,
+  autovacuum_count
+from pg_stat_user_tables
+where relname = 'orders';
 ```
 
 Reference: [VACUUM](https://supabase.com/docs/guides/database/database-size#vacuum-operations)

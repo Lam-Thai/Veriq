@@ -28,7 +28,7 @@ select * from orders where user_id = 3;
 
 ```sql
 -- Collect IDs and query once with ANY
-select * from orders where user_id = any(array[1, 2, 3, ...]);
+select * from orders where user_id = any(array[1, 2, 3]);
 
 -- Or use JOIN instead of loop
 select u.id, u.name, o.*

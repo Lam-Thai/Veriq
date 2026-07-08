@@ -1,7 +1,7 @@
 ---
 title: Use EXPLAIN ANALYZE to Diagnose Slow Queries
 impact: LOW-MEDIUM
-impactDescription: Identify exact bottlenecks in query execution
+impactDescription: Pinpoints the exact bottleneck via real timings and row counts (e.g. 999,950 rows filtered, 450ms execution) instead of guesswork
 tags: explain, analyze, diagnostics, query-plan
 ---
 

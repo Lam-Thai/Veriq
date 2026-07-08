@@ -39,7 +39,10 @@ Check your driver settings:
 
 ```sql
 -- Many drivers use prepared statements by default
--- Node.js pg: { prepare: false } to disable
+-- Node.js pg: client.query() only creates a named prepared statement when
+--   you pass a `name` — omit it for unnamed queries, which is pooling-safe.
+--   client.query({ text, values })          -- unnamed, safe under pooling
+--   client.query({ text, values, name })     -- named, avoid with transaction pooling
 -- JDBC: prepareThreshold=0 to disable
 ```
 

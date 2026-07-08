@@ -1,7 +1,7 @@
 ---
 title: Enable pg_stat_statements for Query Analysis
 impact: LOW-MEDIUM
-impactDescription: Identify top resource-consuming queries
+impactDescription: Ranks every query by call count, total/mean execution time, and resource usage to surface the true top offenders
 tags: pg-stat-statements, monitoring, statistics, performance
 ---
 

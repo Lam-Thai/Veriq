@@ -7,7 +7,7 @@ tags: indexes, covering-index, include, index-only-scan
 
 ## Use Covering Indexes to Avoid Table Lookups
 
-Covering indexes include all columns needed by a query, enabling index-only scans that skip the table entirely.
+Covering indexes include all columns needed by a query, which can enable index-only scans that avoid the table heap — Postgres still falls back to a heap fetch for pages the visibility map hasn't marked all-visible yet.
 
 **Incorrect (index scan + heap fetch):**
 
@@ -24,7 +24,8 @@ select email, name, created_at from users where email = 'user@example.com';
 -- Include non-searchable columns in the index
 create index users_email_idx on users (email) include (name, created_at);
 
--- All columns served from index, no table access needed
+-- Can serve all columns from the index alone (index-only scan) once the
+-- visibility map marks the relevant pages all-visible
 select email, name, created_at from users where email = 'user@example.com';
 ```
 
