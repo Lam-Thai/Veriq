@@ -1,0 +1,75 @@
+# Local development / deployable-build stack for Veriq.
+#
+# Quick start:
+#   cp backend/.env.example backend/.env        # same file `uvicorn --reload` reads natively
+#   cp frontend/.env.example frontend/.env.local # same file `npm run dev` reads natively
+#   cp .env.example .env                         # NEXT_PUBLIC_* build args only, see below
+#   docker compose up --build
+#
+# All runtime configuration is sourced from those .env / .env.local files via
+# `env_file` below — nothing is baked into the images. The one exception is
+# the frontend's NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY (and related public URLs):
+# Next.js inlines NEXT_PUBLIC_* values into the client bundle at build time,
+# so they're passed as build args instead. These are public/publishable by
+# design (shipped to every browser already) — not secrets. See
+# frontend/Dockerfile for details and README.md for the full write-up.
+
+services:
+  backend:
+    build:
+      context: ./backend
+    image: veriq-backend:local
+    env_file:
+      - ./backend/.env
+    ports:
+      - "8000:8000"
+    # No healthcheck block here — backend/Dockerfile already declares a
+    # HEALTHCHECK, and Compose reads that image-level check to satisfy
+    # `frontend.depends_on.backend.condition: service_healthy` below.
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY:-}
+        NEXT_PUBLIC_CLERK_SIGN_IN_URL: ${NEXT_PUBLIC_CLERK_SIGN_IN_URL:-/sign-in}
+        NEXT_PUBLIC_CLERK_SIGN_UP_URL: ${NEXT_PUBLIC_CLERK_SIGN_UP_URL:-/sign-up}
+        NEXT_PUBLIC_CLERK_SIGN_IN_FORCE_REDIRECT_URL: ${NEXT_PUBLIC_CLERK_SIGN_IN_FORCE_REDIRECT_URL:-/dashboard}
+        NEXT_PUBLIC_CLERK_SIGN_UP_FORCE_REDIRECT_URL: ${NEXT_PUBLIC_CLERK_SIGN_UP_FORCE_REDIRECT_URL:-/dashboard}
+    image: veriq-frontend:local
+    env_file:
+      - ./frontend/.env.local
+    ports:
+      - "3000:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  # Reserved for the currently-paused Prisma/PostgreSQL persistence effort.
+  # Not started by a plain `docker compose up` — only with
+  # `docker compose --profile postgres up`. Uncomment and point
+  # DATABASE_URL/DIRECT_URL at this service in frontend/.env.local once that
+  # work lands.
+  #
+  # Credentials come from ./postgres.env (see postgres.env.example) via
+  # env_file, the same pattern as backend/frontend above — deliberately not
+  # an inline `environment:` block, so this file never contains a
+  # `PASSWORD: <value>`-shaped line for a secret scanner to catch, even a
+  # throwaway local one behind a variable reference.
+  # postgres:
+  #   image: postgres:17-alpine
+  #   profiles: ["postgres"]
+  #   env_file:
+  #     - ./postgres.env
+  #   ports:
+  #     - "5432:5432"
+  #   volumes:
+  #     - postgres_data:/var/lib/postgresql/data
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER}"]
+  #     interval: 10s
+  #     timeout: 3s
+  #     retries: 5
+
+# volumes:
+#   postgres_data:

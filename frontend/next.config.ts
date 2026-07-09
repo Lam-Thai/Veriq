@@ -8,6 +8,11 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  // Emits a self-contained `.next/standalone` build (minimal traced
+  // node_modules + server) so the Docker runtime stage doesn't need to
+  // carry devDependencies or the full node_modules tree. No effect on
+  // `next dev`/`next start` outside Docker.
+  output: "standalone",
   async headers() {
     return [{ source: "/(.*)", headers: securityHeaders }];
   },
