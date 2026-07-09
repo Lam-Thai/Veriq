@@ -85,11 +85,12 @@ Full mapping of which agents rely on which skills lives in [.claude/README.md](.
 ## Repo layout
 
 ```
-frontend/   Next.js (App Router, TypeScript, Tailwind) — npm
-backend/    FastAPI (Python 3.12+) — health check + scaffold for future routes
-.husky/     Git hooks (pre-push test gate), versioned in the repo
-.claude/    Agents & skills used by Claude Code on this repo
-.github/    Agents, skills, and CI workflows used by GitHub Copilot / Actions
+frontend/           Next.js (App Router, TypeScript, Tailwind) — npm
+backend/            FastAPI (Python 3.12+) — health check + scaffold for future routes
+docker-compose.yml  Runs frontend + backend together in containers — see "Docker" below
+.husky/             Git hooks (pre-push test gate), versioned in the repo
+.claude/            Agents & skills used by Claude Code on this repo
+.github/            Agents, skills, and CI workflows used by GitHub Copilot / Actions
 ```
 
 ## Frontend
@@ -119,6 +120,44 @@ ruff check .
 mypy app
 pytest -q
 ```
+
+## Docker: running the full stack
+
+The frontend and backend can also be run as containers via a single `docker compose up`, without touching the native `npm run dev` / `.venv` workflows above — both continue to work unchanged. This is for local development and deployable builds only; it does not cover production orchestration (Kubernetes/ECS), CI image publishing, or multi-arch builds.
+
+```
+cp backend/.env.example backend/.env         # same file uvicorn reads natively
+cp frontend/.env.example frontend/.env.local  # same file `next dev`/`next build` read natively
+cp .env.example .env                          # NEXT_PUBLIC_* build args only, see below
+
+docker compose up --build
+# frontend → http://localhost:3000
+# backend  → http://localhost:8000/health
+```
+
+**How configuration flows in:** `docker-compose.yml` sources runtime configuration for both services from `backend/.env` and `frontend/.env.local` via `env_file` — the exact same files the native workflows already use. Nothing is hardcoded into `frontend/Dockerfile` or `backend/Dockerfile`, and neither file is copied into an image; they're mounted in as environment variables when each container starts.
+
+The one exception is `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` (and the related `NEXT_PUBLIC_CLERK_*_URL` values): Next.js inlines `NEXT_PUBLIC_*` variables into the client JavaScript bundle at build time — this is standard Next.js behavior for any app, not specific to this one — so they must be available when the image is *built*, not just when the container starts. They're passed as Docker build args (`docker-compose.yml` → `frontend.build.args`, sourced from the root `.env` file created above) rather than baked into `frontend/Dockerfile` as literal values. These particular keys are *publishable*/public by design (already shipped to every visitor's browser in plain text) — unlike `CLERK_SECRET_KEY` or database URLs, embedding them at build time isn't a secret-handling concern.
+
+**Verifying no secrets leak into an image:**
+
+```
+docker compose build
+docker history veriq-frontend:local
+docker history veriq-backend:local
+```
+
+Neither should show `CLERK_SECRET_KEY`, `DATABASE_URL`, `ALLOWED_ORIGINS`, or any other value from `.env`/`.env.local` — only the public Clerk build args described above.
+
+**Verifying the frontend can reach the backend over the compose network:**
+
+```
+docker compose exec frontend wget -qO- http://backend:8000/health
+```
+
+Both services join the default compose network and resolve each other by service name (`backend`, `frontend`); `backend:8000` is only reachable from inside that network; the host-published `localhost:8000`/`localhost:3000` ports are for your browser/tools, not how the containers talk to each other.
+
+A commented-out `postgres` service is included in `docker-compose.yml`, gated behind a `postgres` Compose profile so it never starts on a plain `docker compose up`. It's a placeholder for the currently-paused Prisma/PostgreSQL persistence effort and isn't required for anything in this section. Its credentials come from `postgres.env` (`cp postgres.env.example postgres.env`, then fill in your own values), the same `env_file` pattern as the frontend/backend services above — kept out of `docker-compose.yml` itself and out of git, so no password of any kind (real or throwaway) is ever committed to the repo.
 
 ## Git hooks: pre-push test gate
 

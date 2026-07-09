@@ -29,7 +29,22 @@ backend/.env
 !.env.example
 !.env.*.example
 
-# belt-and-suspenders: name the two files this repo actually uses today, in case the
+# postgres.env doesn't match the `.env`/`.env.*` wildcard above (no leading
+# dot) since docker-compose.yml's optional postgres service names it that
+# way to keep it out of Compose's implicit root-.env auto-loading.
+postgres.env
+!postgres.env.example
+
+# belt-and-suspenders: name the files this repo actually uses today, in case the
 # wildcard rule above is ever narrowed or removed without someone re-checking this list
 /.env
 /frontend/.env.local
+/backend/.env
+
+# Docker Compose local overrides — Compose auto-loads these on top of
+# docker-compose.yml, so they're a common place to stash ad-hoc local
+# secrets, personal port/volume tweaks, etc. Keep them machine-local.
+docker-compose.override.yml
+docker-compose.override.yaml
+docker-compose.*.local.yml
+docker-compose.*.local.yaml
