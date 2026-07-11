@@ -56,6 +56,13 @@ export async function createServiceToken(userId: string, role: string): Promise<
 
 ## Rate Limiting
 
+> **Repo reality check**: `@upstash/ratelimit` is not installed and no Redis/Upstash instance is
+> configured anywhere in this repo as of this writing. Don't import `@/lib/ratelimit` — it
+> doesn't exist yet. Until it's actually set up, note the rate-limiting gap explicitly in your
+> output (e.g. "no rate limit applied — no infra installed yet") rather than silently omitting it
+> or fabricating an import that will fail to resolve. The pattern below is the target shape for
+> when that infra is added, not a claim it's already there.
+
 ### Next.js (Upstash)
 ```ts
 // lib/ratelimit.ts
@@ -127,6 +134,15 @@ export const env = EnvSchema.parse(process.env)
 ```
 This only guards `next dev`/`next start` where `lib/env.ts` actually executes. It does **not**
 guard `next build` — see "Third-Party SDK Production Verification" below for the gap that leaves.
+
+### `server-only` guard on modules that read secret env vars
+Any module that imports `env` from `lib/env.ts` to read a server secret (not a `NEXT_PUBLIC_*`
+value) and could plausibly be imported by mistake from a `"use client"` file should start with
+`import "server-only"` (the `server-only` package, a transitive Next.js dependency — no install
+needed). This turns an accidental client-side import into a build error instead of a silent
+secret leak into the browser bundle. Real example: `lib/stripe-price-map.ts` reads
+`env.STRIPE_PRICE_ID_PRO` and is guarded this way since it's plausible a UI component could
+import it directly instead of going through the API route.
 
 ### FastAPI
 ```python

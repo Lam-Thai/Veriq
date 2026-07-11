@@ -26,6 +26,7 @@ Consult these skills (`.claude/skills/<name>/SKILL.md`) while auditing:
 | `typescript` | TS-specific vulnerabilities (type assertions, any) |
 | `python` | Python-specific vulnerabilities (deserialization, injection) |
 | `error-handling` | Logging/redaction correctness for A09 findings |
+| `payments` | Stripe-specific checklist below — signature verification, double-billing prevention |
 | `engineering-standards` | Security/scalability/readability bar — applies to all output |
 
 ---
@@ -137,6 +138,41 @@ ask what you can reasonably infer.
 
 ---
 
+## Payments (Stripe) — checked whenever the diff touches checkout/billing/webhooks
+
+> Derived from a real audit of this repo's first Stripe integration
+> (`frontend/app/api/checkout/route.ts`, `frontend/app/api/webhooks/stripe/route.ts`) — every
+> item here was either a real finding or a real "verified passing" in that audit, not
+> theoretical. See the `payments` skill for the full implementation pattern these check against.
+
+```
+□ Webhook signature verified (stripe.webhooks.constructEvent against the raw body from
+  request.text(), never request.json()) before ANY event data is read or acted on
+□ Missing/invalid stripe-signature header returns 400 — never processes the event anyway
+□ Client never sends or sees a raw Stripe Price ID — only an abstract plan id, mapped to the
+  real price id in a server-only module
+□ Checkout Session's `customer` and `client_reference_id`/`metadata.userId` are always derived
+  from the authenticated session — never accepted from the request body
+□ A user who already has a billable subscription (ACTIVE/TRIALING/PAST_DUE) is blocked from
+  starting a second Checkout Session against the same Stripe Customer — Stripe will otherwise
+  create a second, duplicate subscription and charge the card on file again (real double-billing,
+  not theoretical — treat as High if missing)
+□ The find-or-create Stripe Customer / local subscription-record step handles the race where two
+  concurrent requests from the same new user both find nothing and both try to create — a bare
+  Prisma unique-constraint 500 on double-click is a Medium, not a blocker, but should be handled
+□ Webhook handler writes are idempotent under event redelivery (updateMany/upsert keyed on a
+  unique external id, not an increment/append) — Stripe redelivers events, this WILL happen
+□ No unauthenticated page/route makes an outbound call to the payment provider's API keyed on a
+  raw client-supplied id (e.g. a `?session_id=` query param) without format-validating it first —
+  cheap unauthenticated amplification against API quota otherwise
+□ Stripe secret key, webhook signing secret never hardcoded or logged — same rule as any other
+  secret, but doubly worth checking here given the blast radius
+□ Logged webhook/checkout errors include ids (`stripeCustomerId`, `sessionId`, `event.type`) but
+  never full Stripe object dumps or full customer email/PII
+```
+
+---
+
 ## A08 — CI/CD & Supply-Chain Integrity (GitHub Actions, git hooks)
 
 > Not app code, but still attack surface: a compromised workflow or hook runs with
@@ -202,7 +238,7 @@ After:
 | Severity | Examples |
 |---|---|
 | Critical | Data breach, account takeover, RCE, auth bypass, repo secret exposed to a forked-PR workflow run |
-| High | IDOR, privilege escalation, secret in code, path traversal, remote-fetch-and-execute in a git hook or workflow (`curl \| sh`) |
+| High | IDOR, privilege escalation, secret in code, path traversal, remote-fetch-and-execute in a git hook or workflow (`curl \| sh`), a user able to trigger a duplicate/second payment-provider subscription (double billing) |
 | Medium | Missing rate limit, verbose error, insecure config, missing header, unpinned third-party GitHub Action (tag/branch instead of SHA) |
 | Low | Informational leak in error message, non-critical misconfiguration, missing `timeout-minutes`/`concurrency` on a workflow job |
 

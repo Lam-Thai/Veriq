@@ -103,6 +103,13 @@ except Exception:
 
 ## Structured Logging
 
+> **Repo reality check**: `pino` is not installed and `lib/logger.ts` does not exist in this repo
+> as of this writing (same for `structlog` on any FastAPI service that hasn't set it up). Until
+> that infra exists, `console.error("[context] message", err)` in TypeScript is the accepted
+> interim pattern — see `lib/api-error.ts` and `app/api/checkout/route.ts` for the real precedent.
+> Don't import a `lib/logger.ts` that isn't there. The structured pattern below is the target
+> shape for once logging infra is actually added; treat it as forward design, not present fact.
+
 ### TypeScript (pino)
 ```ts
 // lib/logger.ts
