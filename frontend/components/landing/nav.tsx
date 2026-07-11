@@ -14,20 +14,26 @@ export function Nav() {
         <BrandLogo href="#" />
 
         <ul className="hidden items-center gap-7 md:flex">
-          {NAV_LINKS.map((link) => (
-            <li key={link.label}>
-              <a
-                href={link.href}
-                className={cn(
-                  "text-(length:--type-nav-link-size)/(--type-nav-link-lh) tracking-(--type-nav-link-ls) text-white/70",
-                  "transition-colors duration-(--duration-fast) hover:text-white",
-                  "rounded-xs focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-focus",
+          {NAV_LINKS.map((link) => {
+            const linkClassName = cn(
+              "text-(length:--type-nav-link-size)/(--type-nav-link-lh) tracking-(--type-nav-link-ls) text-white/70",
+              "transition-colors duration-(--duration-fast) hover:text-white",
+              "rounded-xs focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-focus",
+            );
+            return (
+              <li key={link.label}>
+                {link.href.startsWith("#") ? (
+                  <a href={link.href} className={linkClassName}>
+                    {link.label}
+                  </a>
+                ) : (
+                  <Link href={link.href} className={linkClassName}>
+                    {link.label}
+                  </Link>
                 )}
-              >
-                {link.label}
-              </a>
-            </li>
-          ))}
+              </li>
+            );
+          })}
         </ul>
 
         <div className="hidden items-center gap-4 md:flex">
