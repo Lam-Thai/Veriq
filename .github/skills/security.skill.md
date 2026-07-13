@@ -132,8 +132,39 @@ const EnvSchema = z.object({
 })
 export const env = EnvSchema.parse(process.env)
 ```
-This only guards `next dev`/`next start` where `lib/env.ts` actually executes. It does **not**
-guard `next build` — see "Third-Party SDK Production Verification" below for the gap that leaves.
+A naive version of this throws during `next build` too, not just at real runtime — `next
+build`'s "Collecting page data" step imports every route module to statically analyze it, which
+runs that module's top-level code (including any client singleton constructed from `env.*` at
+module scope, e.g. a Stripe or S3 client) even though no handler is ever invoked. That makes
+every secret required just to run `next build`, which breaks in any CI build step or fresh clone
+that doesn't have every real secret available — a real incident in this repo (a required Stripe
+var broke `npm run build` in the E2E CI job, which never actually calls Stripe). The fix: only
+relax validation for the literal `next build` CLI process, using the phase marker Next.js itself
+sets, never for anything that actually serves a request.
+```ts
+// lib/env.ts — real, working version of this pattern
+const isProductionBuildPhase = process.env.NEXT_PHASE === "phase-production-build"
+// ^ Next.js sets this only for the `next build` CLI process itself
+//   (node_modules/next/dist/build/index.js) — `next start`/`next dev`/a real deployment are
+//   separate process launches where it's never set, so this can't leak into anything real.
+
+function loadEnv() {
+  const parsed = EnvSchema.safeParse(process.env)
+  if (parsed.success) return parsed.data
+  if (!isProductionBuildPhase) throw parsed.error   // real runtime — fail loudly, always
+
+  // Build-time-only placeholders, each still satisfying its own format constraint so a
+  // module-scope client construction doesn't throw during static analysis. Real values win
+  // whenever present — this only fills in what's genuinely missing.
+  return EnvSchema.parse({ ...BUILD_PLACEHOLDERS, ...process.env })
+}
+export const env = loadEnv()
+```
+Verify this actually works both ways before trusting it: temporarily rename `.env.local` aside
+and confirm `next build` now succeeds (with a visible warning) *and* that `next start` still
+throws for a route that genuinely needs the missing var — don't just trust the logic on paper.
+See also "Third-Party SDK Production Verification" below for the related-but-different Clerk
+case, where the SDK itself (not your own zod schema) degrades ungracefully outside `next dev`.
 
 ### `server-only` guard on modules that read secret env vars
 Any module that imports `env` from `lib/env.ts` to read a server secret (not a `NEXT_PUBLIC_*`
