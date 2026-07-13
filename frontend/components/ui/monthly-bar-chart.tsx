@@ -9,26 +9,33 @@ export const MONTHLY_BARS = [
   { month: "Jun", heightPct: 100 },
 ];
 
+type Bar = { month: string; heightPct: number };
+
 type MonthlyBarChartProps = {
   /** Height of the bar track, e.g. "h-32" or "h-36". Must be a definite-height utility — the
    * bars use percentage heights, which only resolve against a parent with a definite height. */
   trackHeightClassName: string;
+  /** Defaults to the static MONTHLY_BARS mock curve — pass real per-user data to render actual
+   * amounts instead. The last entry is treated as the "current" month and highlighted. */
+  bars?: Bar[];
 };
 
-export function MonthlyBarChart({ trackHeightClassName }: MonthlyBarChartProps) {
+export function MonthlyBarChart({ trackHeightClassName, bars = MONTHLY_BARS }: MonthlyBarChartProps) {
+  const currentMonth = bars.at(-1)?.month;
+
   return (
     <div>
       <div className={`flex ${trackHeightClassName} items-end gap-3`}>
-        {MONTHLY_BARS.map((bar) => (
+        {bars.map((bar) => (
           <div
             key={bar.month}
-            className={bar.month === "Jun" ? "flex-1 rounded-t-xs bg-primary" : "flex-1 rounded-t-xs bg-primary/25"}
+            className={bar.month === currentMonth ? "flex-1 rounded-t-xs bg-primary" : "flex-1 rounded-t-xs bg-primary/25"}
             style={{ height: `${bar.heightPct}%` }}
           />
         ))}
       </div>
       <div className="mt-2 flex gap-3">
-        {MONTHLY_BARS.map((bar) => (
+        {bars.map((bar) => (
           <span
             key={bar.month}
             className="flex-1 text-center text-(length:--type-fine-print-size) text-ink-muted-48"
