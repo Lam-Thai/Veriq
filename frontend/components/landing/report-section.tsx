@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { SectionEyebrow } from "@/components/ui/section-eyebrow";
 import { PillButton } from "@/components/ui/pill-button";
 import { CheckIcon } from "@/components/ui/icons";
@@ -38,7 +39,7 @@ export function ReportSection() {
           </ul>
 
           <div className="mt-8">
-            <PillButton as="a" href="#" variant="primary">
+            <PillButton as={Link} href="/dashboard/report" variant="primary">
               View full report
             </PillButton>
           </div>

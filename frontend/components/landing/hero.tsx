@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { PillButton } from "@/components/ui/pill-button";
 import { DotIcon, ArrowRightIcon } from "@/components/ui/icons";
 import { HeroMockup } from "@/components/landing/hero-mockup";
@@ -24,7 +25,7 @@ export function Hero() {
         </p>
 
         <div className="mt-9 flex flex-col items-center gap-3 sm:flex-row">
-          <PillButton as="a" href="#" variant="primary">
+          <PillButton as={Link} href="/dashboard/report" variant="primary">
             Generate My Report
             <ArrowRightIcon className="h-4 w-4" />
           </PillButton>

@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 import { currentUser } from "@clerk/nextjs/server";
 import { renderToBuffer } from "@react-pdf/renderer";
 import { ApiError } from "@/lib/api-error";
@@ -11,6 +11,21 @@ import type { User } from "@clerk/nextjs/server";
 // react-pdf's renderToBuffer and Prisma's pg driver adapter both need Node APIs (fontkit,
 // streams, net/tls) — this route can never run on the Edge runtime.
 export const runtime = "nodejs";
+
+// `platformsParam` is a raw, client-supplied comma-separated string, so this only ever narrows
+// `connections` (already scoped to the authed user) down by intersection — it can never widen
+// the result to include another user's data.
+function filterConnections(connections: UserConnection[], platformsParam: string | null): UserConnection[] {
+  if (platformsParam === null) return connections;
+
+  const requestedSlugs = new Set(
+    platformsParam
+      .split(",")
+      .map((slug) => slug.trim())
+      .filter(Boolean),
+  );
+  return connections.filter((connection) => requestedSlugs.has(connection.slug));
+}
 
 function buildReportData(clerkUser: User, connections: UserConnection[]): ReportData {
   const userName =
@@ -31,8 +46,13 @@ function buildReportData(clerkUser: User, connections: UserConnection[]): Report
   return { generatedAt: new Date(), userName, rangeLabel, totalVerified, bySource };
 }
 
-/** Renders and downloads the signed-in user's verified-income report as a PDF. */
-export async function GET() {
+/**
+ * Renders and downloads the signed-in user's verified-income report as a PDF. An optional
+ * `?platforms=slug1,slug2` query param (set by the report-builder UI) restricts which connected
+ * platforms are included; omitting it — as the dashboard's quick-download link does — includes
+ * all of the user's connections.
+ */
+export async function GET(request: NextRequest) {
   const clerkUser = await currentUser();
   if (!clerkUser) return ApiError.unauthorized();
 
@@ -41,7 +61,13 @@ export async function GET() {
     return ApiError.conflict("NO_CONNECTIONS", "Connect at least one platform before generating a report.");
   }
 
-  const data = buildReportData(clerkUser, connections);
+  const platformsParam = request.nextUrl.searchParams.get("platforms");
+  const selectedConnections = filterConnections(connections, platformsParam);
+  if (selectedConnections.length === 0) {
+    return ApiError.conflict("NO_PLATFORMS_SELECTED", "Select at least one platform to include in the report.");
+  }
+
+  const data = buildReportData(clerkUser, selectedConnections);
 
   let buffer: Buffer;
   try {
