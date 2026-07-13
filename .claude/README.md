@@ -14,9 +14,11 @@ and skills are auto-discovered.
     auth.md
     code-review.md
     database.md
+    docker.md
     fastapi-route.md
     github-issue.md
     migration.md
+    payments.md
     security-audit.md
     testing.md
     ui-component.md
@@ -24,10 +26,12 @@ and skills are auto-discovered.
     ai-integration/SKILL.md
     api-contracts/SKILL.md
     design-system/SKILL.md
+    docker/SKILL.md
     engineering-standards/SKILL.md
     error-handling/SKILL.md
     github-issues/SKILL.md
     nextjs/SKILL.md
+    payments/SKILL.md
     postgresql/SKILL.md
     prisma/SKILL.md
     python/SKILL.md
@@ -42,22 +46,26 @@ and skills are auto-discovered.
 |------------------------------------|-----------------------------------------|
 | `agents/*.agent.md`                | `agents/*.md` (YAML frontmatter)        |
 | `skills/*.skill.md`                | `skills/*/SKILL.md`                      |
-| `agents/engineering-standards.skill.md` | `skills/engineering-standards/SKILL.md` (it is a skill, filed correctly) |
 | `#file:.github/skills/x.skill.md`  | references to the `x` skill by name     |
+
+`.github/skills/engineering-standards.skill.md` was previously misfiled under `.github/agents/`
+(it's a skill, not an agent) — corrected so it now maps cleanly like every other skill above.
 
 ## Agent → skill mapping
 
 | Agent | Skills it relies on |
 |---|---|
 | `ai-feature` | typescript, nextjs, ai-integration, python, sqlalchemy, api-contracts, security, error-handling, engineering-standards |
-| `api-route` | typescript, nextjs, prisma, api-contracts, security, error-handling, engineering-standards |
+| `api-route` | typescript, nextjs, prisma, api-contracts, security, error-handling, payments, engineering-standards |
 | `auth` | typescript, nextjs, prisma, api-contracts, security, error-handling, engineering-standards |
 | `code-review` | typescript, python, prisma, sqlalchemy, postgresql, security, api-contracts, error-handling, engineering-standards |
 | `database` | postgresql, prisma, sqlalchemy, typescript, python, engineering-standards |
+| `docker` | docker, security, engineering-standards |
 | `fastapi-route` | python, sqlalchemy, api-contracts, security, error-handling, postgresql, engineering-standards |
 | `github-issue` | github-issues, engineering-standards |
 | `migration` | postgresql, prisma, sqlalchemy, engineering-standards |
-| `security-audit` | security, api-contracts, typescript, python, error-handling, engineering-standards |
+| `payments` | payments, typescript, nextjs, prisma, api-contracts, security, error-handling, engineering-standards |
+| `security-audit` | security, api-contracts, typescript, python, error-handling, payments, engineering-standards |
 | `testing` | typescript, python, api-contracts, error-handling, engineering-standards |
 | `ui-component` | typescript, nextjs, design-system, engineering-standards |
 

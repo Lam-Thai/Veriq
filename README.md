@@ -29,8 +29,8 @@
 | CI/CD | GitHub Actions + [Husky](https://typicode.github.io/husky/) pre-push hook | 🟢 Live | Runs tests/checks automatically on every push and pull request |
 | Security | [GitGuardian](https://www.gitguardian.com/) secret scanning | 🟢 Live | Blocks a PR if an API key or password is accidentally committed |
 | Security | [CodeQL](https://codeql.github.com/) static analysis | 🟢 Live | Scans code for known vulnerability patterns on every PR |
-| Payments | **[Stripe](https://stripe.com/) Checkout** | 🟡 Planned | Pricing page + paid subscription checkout — [issue #1](https://github.com/Lam-Thai/Veriq/issues/1) |
-| Auth | **[Clerk](https://clerk.com/)** | 🟡 Planned | Sign-in/sign-up pages and account/route protection — [issue #2](https://github.com/Lam-Thai/Veriq/issues/2) |
+| Payments | **[Stripe](https://stripe.com/) Checkout** | 🟢 Live | Public `/pricing` page, Checkout Session creation, signature-verified webhook syncing subscription status — [issue #1](https://github.com/Lam-Thai/Veriq/issues/1) |
+| Auth | **[Clerk](https://clerk.com/)** | 🟢 Live | Sign-in/sign-up pages and account/route protection — [issue #2](https://github.com/Lam-Thai/Veriq/issues/2) |
 
 ---
 
@@ -56,6 +56,8 @@ This exists in **two parallel, identical copies** — one for [Claude Code](http
 | `migration` | Safely changing the database schema without breaking production | ✅ | ✅ |
 | `ui-component` | Building web pages/components that look and behave consistently | ✅ | ✅ |
 | `ai-feature` | Any feature that calls an LLM (chat, extraction, summarization) | ✅ | ✅ |
+| `payments` | Stripe Checkout, webhooks, subscription/billing status | ✅ | ✅ |
+| `docker` | Dockerfiles, docker-compose, containerizing a service | ✅ | ✅ |
 | `testing` | Writing unit, integration, and end-to-end tests | ✅ | ✅ |
 | `security-audit` | Final security review before anything touching auth/payments/user data ships | ✅ | ✅ |
 | `code-review` | General "is this good enough to merge" review | ✅ | ✅ |
@@ -76,6 +78,8 @@ Skills aren't code — they're the *standards* every agent is required to follow
 | `typescript` / `python` | Language-level conventions and strict type-checking rules |
 | `prisma` / `sqlalchemy` / `postgresql` | Database schema and query conventions, kept identical across both backends |
 | `ai-integration` | Rules for safely calling Claude/LLMs — prompt handling, structured output, input sanitization |
+| `payments` | Stripe Checkout/webhook conventions — server-resolved price IDs, signature verification, double-billing prevention |
+| `docker` | Multi-stage builds, non-root users, healthchecks, secret-vs-public-build-arg rules |
 | `github-issues` | Template and safety rules for filing issues via the GitHub CLI (Claude Code only) |
 
 Full mapping of which agents rely on which skills lives in [.claude/README.md](.claude/README.md).

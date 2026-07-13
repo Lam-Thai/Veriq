@@ -2,18 +2,39 @@
 > Used by: Next.js runtime only. Prisma is the migration authority for the shared DB.
 
 ## Client Singleton
+This repo is pinned to **Prisma 7**, which removed the Rust query engine and the schema-level
+`url`/`directUrl` fields — the client connects through a driver adapter instead, and connection
+strings live in `prisma.config.ts` (CLI/migrations) and directly in `lib/db.ts` (app runtime).
+Generate to a custom output path (`prisma/schema.prisma`'s `generator client { output = ... }`),
+not the classic `@prisma/client` import — check `prisma/schema.prisma`'s `generator` block for
+the actual output path before assuming `@prisma/client` resolves.
+
 ```ts
-// lib/db.ts
-import { PrismaClient } from '@prisma/client'
+// lib/db.ts — real, working version of this pattern in this repo
+import { PrismaPg } from '@prisma/adapter-pg'
+import { PrismaClient } from '@/lib/generated/prisma/client'  // path from schema.prisma's `output`
+import { env } from '@/lib/env'
 
 const globalForPrisma = globalThis as unknown as { prisma: PrismaClient }
 
-export const db = globalForPrisma.prisma ?? new PrismaClient({
-  log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
-})
+// Adapter constructed lazily (right side of `??`) so an HMR reload reusing the cached
+// singleton below doesn't also spin up a redundant, unused connection pool.
+export const db =
+  globalForPrisma.prisma ??
+  new PrismaClient({
+    adapter: new PrismaPg({ connectionString: env.DATABASE_URL }),
+    log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
+  })
 
 if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = db
 ```
+
+`prisma.config.ts` (not the schema file) configures the migration engine's connection —
+typically the **direct**, non-pooled URL, since PgBouncer's transaction-mode pooling doesn't
+reliably support the DDL/prepared statements `prisma migrate` issues. The app's runtime client
+above uses the **pooled** URL instead. If a project targets an older Prisma major (check
+`package.json`), the classic `new PrismaClient()` with no adapter and a schema-level `url` is
+correct instead — don't assume; check the installed version first.
 
 ## Schema Conventions
 ```prisma

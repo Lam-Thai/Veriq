@@ -23,6 +23,7 @@ coupled to the frontend: resource creation, retrieval, update, delete.
 | `#file:.github/skills/api-contracts.skill.md` | Response shapes, status codes, error envelope |
 | `#file:.github/skills/security.skill.md` | Input validation, rate limiting, security headers |
 | `#file:.github/skills/error-handling.skill.md` | Result type, error classes, structured logging |
+| `#file:.github/skills/payments.skill.md` | Webhook signature verification, Stripe-specific route shape (if applicable) |
 | `#file:.github/skills/engineering-standards.skill.md` | Security/scalability/readability bar — applies to all output |
 
 ---
@@ -52,66 +53,99 @@ app/api/
     route.ts        ← GET (list), POST (create)
     [id]/
       route.ts      ← GET (single), PATCH (update), DELETE
+  webhooks/
+    [provider]/
+      route.ts       ← see "Webhook Routes Are a Different Shape" below
 ```
+
+## Ground Truth (verified against real code in this repo — not aspirational)
+There is no `lib/auth.ts`, `lib/ratelimit.ts`, or `lib/logger.ts` in this repo. Don't import
+them — they don't exist. The real, working precedent for everything below is
+`frontend/app/api/checkout/route.ts` plus `frontend/lib/api-error.ts`.
+- **Auth**: call `currentUser()` or `auth()` from `@clerk/nextjs/server` directly inside the
+  handler. There is no auth wrapper to import.
+- **Errors**: `frontend/lib/api-error.ts` exports an `ApiError` object with only the variants
+  actually in use (`unauthorized`, `notFound`, `internal`, `unprocessable`, `conflict`) — add a
+  new variant there only when a route genuinely needs it, following the same
+  `NextResponse.json({ error: { code, message } }, { status })` shape. There is no
+  `handleApiError` catch-all; each route's top-level `try/catch` calls `ApiError.internal()`
+  directly.
+- **Logging**: `console.error("[route-name] context", err)` is the current, accepted pattern —
+  see `#file:.github/skills/error-handling.skill.md` for why (no `pino`/`lib/logger.ts` installed yet).
+- **Rate limiting**: no rate-limit infra (`@upstash/ratelimit` or otherwise) is installed in
+  this repo yet. Don't import `@/lib/ratelimit` — it doesn't exist. Note the gap in your
+  output instead of silently omitting it or inventing a fake import; see `#file:.github/skills/security.skill.md`.
 
 ## Implementation Skeleton
 ```ts
-import { NextRequest, NextResponse } from 'next/server'
-import { z } from 'zod'
-import { auth } from '@/lib/auth'
-import { db } from '@/lib/db'
-import { ApiError, handleApiError } from '@/lib/api-error'
-import { ratelimit } from '@/lib/ratelimit'
-import { logger } from '@/lib/logger'
+import { NextResponse, type NextRequest } from "next/server";
+import { currentUser } from "@clerk/nextjs/server";
+import { z } from "zod";
+import { ApiError } from "@/lib/api-error";
+import { db } from "@/lib/db";
 
 const BodySchema = z.object({
   // field: z.string().min(1).max(255),
-})
+});
 
-export async function POST(req: NextRequest) {
+export async function POST(request: NextRequest) {
   try {
     // 1. Auth — runs before any other logic, no exceptions
-    const session = await auth()
-    if (!session) return ApiError.unauthorized()
+    const clerkUser = await currentUser();
+    if (!clerkUser) return ApiError.unauthorized();
 
-    // 2. Rate limit per user
-    const { success } = await ratelimit.limit(session.user.id)
-    if (!success) return ApiError.tooManyRequests()
+    // 2. Parse and validate
+    const body: unknown = await request.json().catch(() => null);
+    const parsed = BodySchema.safeParse(body);
+    if (!parsed.success) return ApiError.unprocessable(parsed.error);
 
-    // 3. Parse and validate
-    const body = await req.json()
-    const parsed = BodySchema.safeParse(body)
-    if (!parsed.success) return ApiError.unprocessable(parsed.error)
-
-    // 4. DB write — always scoped to session.user.id
+    // 3. DB write — always scoped to the authenticated user
     const result = await db.resource.create({
-      data: { ...parsed.data, userId: session.user.id },
+      data: { ...parsed.data, userId: clerkUser.id },
       select: { id: true, createdAt: true },
-    })
+    });
 
-    return NextResponse.json({ data: result }, { status: 201 })
+    return NextResponse.json({ data: result }, { status: 201 });
   } catch (err) {
-    logger.error({ err, route: 'POST /api/[resource]' }, 'Unhandled error')
-    return handleApiError(err)
+    console.error("[POST /api/resource] unhandled error", err);
+    return ApiError.internal();
   }
 }
 ```
 
+## Webhook Routes Are a Different Shape
+A route that receives events from a third party (Stripe, GitHub, etc.) is not the CRUD skeleton
+above — see `frontend/app/api/webhooks/stripe/route.ts` for the real, working pattern:
+- **No Clerk auth** — the caller is the third party, not a logged-in user. Trust comes entirely
+  from verifying a signature header against a shared secret.
+- **Raw body required for signature verification** — call `request.text()`, never
+  `request.json()`, before verifying. Most providers' SDKs (e.g. Stripe's
+  `constructEvent`) need the exact raw bytes that were signed; parsing to JSON first breaks
+  the signature check.
+- **Reject before processing** — verify the signature and return 400 on failure *before* any
+  event data is read or acted on. No code path should touch `event.data` pre-verification.
+- **Idempotent writes** — third parties redeliver events. Prefer `updateMany`/`upsert` keyed on
+  a unique external id over anything that increments or appends.
+- See `#file:.github/skills/payments.skill.md` for the Stripe-specific version of this pattern in full.
+
 ## Non-Negotiable Rules
-- Auth is line 1. Zero logic runs before it.
+- Auth is line 1 (except webhook routes — see above). Zero logic runs before it.
 - Always `safeParse` — never `parse` (throws raw zod errors to client).
 - Always `select` on Prisma — never return full model rows.
 - PATCH body uses `BodySchema.partial()` — never require full object for updates.
-- Single-resource routes scope `where` to `{ id, userId: session.user.id }`.
+- Single-resource routes scope `where` to `{ id, userId: <clerk-derived id> }`.
 - Return 404 (not 403) when a user accesses a resource they don't own — never confirm existence.
 - Response envelope is always `{ data: T }` success or `{ error: { code, message } }` failure.
+- Never trust a client-supplied id for anything server-resolves-and-trusts (a price, a plan, a
+  role) — validate against a closed enum and resolve the real value server-side.
 
 ## Audit Checklist
-- [ ] Auth check is first line of every handler
+- [ ] Auth check is first line of every handler (webhook routes: signature check is)
 - [ ] `safeParse` used, not `parse`
-- [ ] Rate limit applied
+- [ ] Rate limiting gap noted if this route is a plausible abuse target (no infra to apply yet)
 - [ ] Resource ownership: `userId` in `where` clause
 - [ ] `select` on all Prisma queries
 - [ ] No internal error details in response body
 - [ ] Correct HTTP status codes (201 create, 204 delete, 422 validation)
-- [ ] Passes `engineering-standards.skill.md` Definition of Done
+- [ ] Webhook routes: raw body used for signature verification, verified before any processing
+- [ ] Passes `#file:.github/skills/engineering-standards.skill.md` Definition of Done

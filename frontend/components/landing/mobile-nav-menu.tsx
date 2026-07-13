@@ -39,21 +39,26 @@ export function MobileNavMenu() {
           className="absolute inset-x-0 top-full border-t border-white/10 bg-surface-black px-6 py-4"
         >
           <ul className="flex flex-col gap-1">
-            {NAV_LINKS.map((link) => (
-              <li key={link.label}>
-                <a
-                  href={link.href}
-                  onClick={() => setIsOpen(false)}
-                  className={cn(
-                    "block rounded-sm px-2 py-2.5 text-(length:--type-button-utility-size) font-normal text-white/80",
-                    "transition-colors duration-(--duration-fast) hover:text-white",
-                    "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-focus",
+            {NAV_LINKS.map((link) => {
+              const linkClassName = cn(
+                "block rounded-sm px-2 py-2.5 text-(length:--type-button-utility-size) font-normal text-white/80",
+                "transition-colors duration-(--duration-fast) hover:text-white",
+                "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-focus",
+              );
+              return (
+                <li key={link.label}>
+                  {link.href.startsWith("#") ? (
+                    <a href={link.href} onClick={() => setIsOpen(false)} className={linkClassName}>
+                      {link.label}
+                    </a>
+                  ) : (
+                    <Link href={link.href} onClick={() => setIsOpen(false)} className={linkClassName}>
+                      {link.label}
+                    </Link>
                   )}
-                >
-                  {link.label}
-                </a>
-              </li>
-            ))}
+                </li>
+              );
+            })}
             <li>
               <Show
                 when="signed-out"

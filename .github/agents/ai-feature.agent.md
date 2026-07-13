@@ -53,11 +53,19 @@ ask what you can reasonably infer.
 
 ## Next.js: Streaming Route
 
+> `lib/auth.ts`, `lib/ai.ts`, `lib/ratelimit.ts`, and `lib/ai-sanitize.ts` don't exist in this
+> repo yet — this skeleton is the target shape for when this agent is first actually invoked,
+> not a claim they're already there. Use `currentUser()`/`auth()` from `@clerk/nextjs/server`
+> directly for the auth check (see `api-route.agent.md`'s "Ground Truth" section and
+> `frontend/app/api/checkout/route.ts` for the real, working pattern), and build `lib/ai.ts` /
+> `lib/ai-sanitize.ts` / `lib/prompts/` as part of the first feature that needs them. No rate-limit
+> infra is installed either — note that gap rather than importing a `lib/ratelimit.ts` that isn't
+> there (see `#file:.github/skills/security.skill.md`).
+
 ```ts
 // app/api/ai/[feature]/route.ts
-import { auth } from '@/lib/auth'
+import { currentUser } from '@clerk/nextjs/server'
 import { ai } from '@/lib/ai'
-import { ratelimit } from '@/lib/ratelimit'
 import { sanitizeAIInput } from '@/lib/ai-sanitize'
 import { SYSTEM_PROMPT } from '@/lib/prompts/[feature]'
 import { z } from 'zod'
@@ -65,11 +73,10 @@ import { z } from 'zod'
 const BodySchema = z.object({ prompt: z.string().min(1).max(4000) })
 
 export async function POST(req: Request) {
-  const session = await auth()
-  if (!session) return new Response('Unauthorized', { status: 401 })
+  const clerkUser = await currentUser()
+  if (!clerkUser) return new Response('Unauthorized', { status: 401 })
 
-  const { success } = await ratelimit.limit(session.user.id)
-  if (!success) return new Response('Rate limited', { status: 429 })
+  // TODO: rate limit per clerkUser.id once rate-limit infra exists — see `#file:.github/skills/security.skill.md`.
 
   const { prompt } = BodySchema.parse(await req.json())
 
