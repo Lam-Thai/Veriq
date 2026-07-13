@@ -62,8 +62,8 @@ model PlatformConnection {
   user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   slug           String
   verifiedAmount Decimal  @db.Decimal(10, 2)
-  connectedAt    DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  connectedAt    DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime @updatedAt @db.Timestamptz(3)
 
   @@unique([userId, slug])
 }

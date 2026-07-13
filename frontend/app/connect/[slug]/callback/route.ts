@@ -60,20 +60,25 @@ export async function POST(request: Request, ctx: RouteContext<"/connect/[slug]/
       return ApiError.internal();
     }
 
-    const user = await db.user.upsert({
-      where: { clerkId: clerkUser.id },
-      create: { clerkId: clerkUser.id, email },
-      update: {},
-      select: { id: true },
-    });
+    try {
+      const user = await db.user.upsert({
+        where: { clerkId: clerkUser.id },
+        create: { clerkId: clerkUser.id, email },
+        update: {},
+        select: { id: true },
+      });
 
-    // Upsert, not create — reconnecting an already-connected platform updates the snapshot
-    // instead of erroring or creating a duplicate row.
-    await db.platformConnection.upsert({
-      where: { userId_slug: { userId: user.id, slug } },
-      create: { userId: user.id, slug, verifiedAmount: platform.verifiedAmount },
-      update: { verifiedAmount: platform.verifiedAmount },
-    });
+      // Upsert, not create — reconnecting an already-connected platform updates the snapshot
+      // instead of erroring or creating a duplicate row.
+      await db.platformConnection.upsert({
+        where: { userId_slug: { userId: user.id, slug } },
+        create: { userId: user.id, slug, verifiedAmount: platform.verifiedAmount },
+        update: { verifiedAmount: platform.verifiedAmount },
+      });
+    } catch (err) {
+      console.error("[connect callback] failed to persist connection", { clerkId: clerkUser.id, slug }, err);
+      return ApiError.internal();
+    }
   }
 
   return NextResponse.json({ result, slug });

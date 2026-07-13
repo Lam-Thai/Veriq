@@ -133,6 +133,15 @@ export function ConnectionsPanel({ initialConnectedSlugs }: ConnectionsPanelProp
       return;
     }
 
+    // A previous attempt for this slug may have closed its popup without the poll below having
+    // fired yet — clear its interval before overwriting the ref, otherwise the stale interval
+    // keeps running and can end up clearing *this* new interval by id instead of itself.
+    const staleInterval = pollIntervals.current[slug];
+    if (staleInterval !== undefined) {
+      clearInterval(staleInterval);
+      delete pollIntervals.current[slug];
+    }
+
     pendingAttempts.current[slug] = { state, popup };
     pollIntervals.current[slug] = setInterval(() => {
       const attempt = pendingAttempts.current[slug];

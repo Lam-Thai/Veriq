@@ -42,7 +42,15 @@ export async function GET() {
   }
 
   const data = buildReportData(clerkUser, connections);
-  const buffer = await renderToBuffer(<ReportDocument data={data} />);
+
+  let buffer: Buffer;
+  try {
+    buffer = await renderToBuffer(<ReportDocument data={data} />);
+  } catch (err) {
+    console.error("[report] failed to render PDF", err);
+    return ApiError.internal();
+  }
+
   const filename = `veriq-verified-income-report-${new Date().toISOString().slice(0, 10)}.pdf`;
 
   return new NextResponse(new Uint8Array(buffer), {

@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE "PlatformConnection" ALTER COLUMN "connectedAt" SET DATA TYPE TIMESTAMPTZ(3),
+ALTER COLUMN "updatedAt" SET DATA TYPE TIMESTAMPTZ(3);
