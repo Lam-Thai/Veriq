@@ -21,7 +21,8 @@ model User {
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 
-  subscription Subscription?
+  subscription        Subscription?
+  platformConnections PlatformConnection[]
 
   @@index([clerkId])
 }
@@ -49,4 +50,20 @@ enum SubscriptionStatus {
   CANCELED
   UNPAID
   TRIALING
+}
+
+// A signed-in user's connection to one mocked income platform (see
+// components/landing/platform-data.ts, the source of truth for valid slugs and each platform's
+// demo verifiedAmount). One row per connected platform per user — reconnecting the same platform
+// upserts this row rather than creating a duplicate.
+model PlatformConnection {
+  id             String   @id @default(cuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  slug           String
+  verifiedAmount Decimal  @db.Decimal(10, 2)
+  connectedAt    DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime @updatedAt @db.Timestamptz(3)
+
+  @@unique([userId, slug])
 }

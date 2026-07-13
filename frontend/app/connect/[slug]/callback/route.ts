@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { createHash, timingSafeEqual } from "node:crypto";
+import { currentUser } from "@clerk/nextjs/server";
 import { findPlatformBySlug } from "@/components/landing/platform-data";
 import { isCallbackRequestBody, stateCookieName, type ConnectResult } from "@/lib/connect-flow";
+import { ApiError } from "@/lib/api-error";
+import { db } from "@/lib/db";
 
 /**
  * Hash both sides to a fixed-length digest before comparing so a length mismatch (e.g. a
@@ -43,6 +46,40 @@ export async function POST(request: Request, ctx: RouteContext<"/connect/[slug]/
     return NextResponse.json({ error: "invalid_state" }, { status: 400 });
   }
 
+  // Defensive — proxy.ts already gates /connect(.*) behind Clerk auth, but this route must never
+  // persist a connection without a real signed-in user to attribute it to.
+  const clerkUser = await currentUser();
+  if (!clerkUser) return ApiError.unauthorized();
+
   const result: ConnectResult = body.decision === "approve" ? "approved" : "denied";
+
+  if (result === "approved") {
+    const email = clerkUser.primaryEmailAddress?.emailAddress;
+    if (!email) {
+      console.error("[connect callback] clerk user has no primary email", { clerkId: clerkUser.id });
+      return ApiError.internal();
+    }
+
+    try {
+      const user = await db.user.upsert({
+        where: { clerkId: clerkUser.id },
+        create: { clerkId: clerkUser.id, email },
+        update: {},
+        select: { id: true },
+      });
+
+      // Upsert, not create — reconnecting an already-connected platform updates the snapshot
+      // instead of erroring or creating a duplicate row.
+      await db.platformConnection.upsert({
+        where: { userId_slug: { userId: user.id, slug } },
+        create: { userId: user.id, slug, verifiedAmount: platform.verifiedAmount },
+        update: { verifiedAmount: platform.verifiedAmount },
+      });
+    } catch (err) {
+      console.error("[connect callback] failed to persist connection", { clerkId: clerkUser.id, slug }, err);
+      return ApiError.internal();
+    }
+  }
+
   return NextResponse.json({ result, slug });
 }

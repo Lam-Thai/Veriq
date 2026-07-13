@@ -2,13 +2,7 @@
 
 import { useState } from "react";
 import { PillButton } from "@/components/ui/pill-button";
-import {
-  CONNECT_MESSAGE_TYPE,
-  CONNECT_RESULT_PARAM,
-  CONNECT_SLUG_PARAM,
-  type ConnectDecision,
-  type ConnectResult,
-} from "@/lib/connect-flow";
+import { CONNECT_MESSAGE_TYPE, type ConnectDecision, type ConnectResult } from "@/lib/connect-flow";
 
 type ConsentActionsProps = {
   slug: string;
@@ -23,8 +17,10 @@ type CallbackResponseBody = {
 /**
  * Approve/Deny for the mock consent screen. Resolves the attempt against the callback route,
  * then reports the result back to whichever surface started the flow: postMessage + close() for
- * the popup path, or a same-tab redirect back to the landing page when opened without an opener
- * (popup-blocked fallback).
+ * the popup path, or a same-tab redirect back to the authenticated dashboard when opened without
+ * an opener (popup-blocked fallback). The callback route has already persisted the connection
+ * server-side by the time either path fires, so the dashboard's next Server Component render
+ * reflects the new state on its own — no result/slug query params needed to communicate it.
  */
 export function ConsentActions({ slug, state }: ConsentActionsProps) {
   const [status, setStatus] = useState<"idle" | "submitting" | "error">("idle");
@@ -58,11 +54,7 @@ export function ConsentActions({ slug, state }: ConsentActionsProps) {
       return;
     }
 
-    const redirectUrl = new URL("/", window.location.origin);
-    redirectUrl.searchParams.set(CONNECT_RESULT_PARAM, body.result);
-    redirectUrl.searchParams.set(CONNECT_SLUG_PARAM, body.slug);
-    redirectUrl.hash = "sources";
-    window.location.href = redirectUrl.toString();
+    window.location.href = "/dashboard";
   }
 
   return (
