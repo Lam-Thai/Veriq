@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type Anthropic from "@anthropic-ai/sdk";
+import { Type, type Schema } from "@google/genai";
 
 // v1 — initial. Produces a plain-English narrative plus structured income-descriptive fields
 // (never credit/lending scoring) from a signed-in user's verified per-platform income. See
@@ -13,6 +13,15 @@ import type Anthropic from "@anthropic-ai/sdk";
  * names come from a fixed internal allowlist (components/landing/platform-data.ts) rather than
  * free-form user input — that boundary could move later, and the model-facing contract shouldn't
  * depend on it holding.
+ *
+ * Passed to Gemini via `config.systemInstruction` (see lib/ai/income-narrative.ts), which keeps
+ * the same structural separation from user content that Anthropic's `system` param gave us — the
+ * model still sees this text in a channel distinct from the <income_data> block below.
+ *
+ * Note for future maintainers: Google's free tier may use free-tier prompts/responses to improve
+ * their products (per Google's published terms) — already communicated to the user out-of-band,
+ * not something this code enforces, but relevant if this prompt is ever extended to carry
+ * anything more sensitive than the income figures it already describes.
  */
 export const INCOME_NARRATIVE_SYSTEM_PROMPT = `
 You are a data-summarization assistant for Veriq, a platform that turns verified gig-work income
@@ -42,57 +51,58 @@ You must NEVER:
 
 Write in plain English only — no markdown, no jargon, no other languages.
 
-Respond by calling the generate_income_narrative tool exactly once, with every field populated
-from the data given. Do not respond with plain text.
+Respond with a single JSON object matching the required response schema exactly, with every
+field populated from the data given. Do not respond with plain text or any wrapping prose.
 `.trim();
 
-export const INCOME_NARRATIVE_TOOL_NAME = "generate_income_narrative";
-
 /**
- * Structured-output tool schema (see .claude/skills/ai-integration/SKILL.md's "Structured Output
- * via Tool Use" pattern). `IncomeNarrativeOutputSchema` below must be kept in sync with this
- * shape — it's the runtime validation gate every tool_use response has to pass before its data is
- * trusted or persisted.
+ * Structured-output schema, in Gemini's `Schema` shape (see .claude/skills/ai-integration/
+ * SKILL.md's structured-output guidance — this is the Gemini equivalent of the Anthropic
+ * `Tool.input_schema` this file used to export). Passed as `config.responseSchema` alongside
+ * `config.responseMimeType: "application/json"` (see lib/ai/income-narrative.ts).
+ *
+ * Note: Gemini's `Schema.type` takes the `Type` enum (uppercase string literals like `"OBJECT"`/
+ * `"STRING"`/`"ARRAY"`), NOT lowercase JSON-Schema type strings — confirmed against the installed
+ * @google/genai package's own type declarations (node_modules/@google/genai/dist/node/node.d.ts),
+ * not assumed from memory.
+ *
+ * `IncomeNarrativeOutputSchema` (zod, below) is still the actual trust boundary — this Gemini
+ * schema only shapes what the model attempts to produce; the zod schema is what every response
+ * must pass before its data is trusted or persisted, exactly as the old Anthropic tool_use input
+ * was validated.
  */
-export const INCOME_NARRATIVE_TOOL: Anthropic.Tool = {
-  name: INCOME_NARRATIVE_TOOL_NAME,
-  description:
-    "Return a structured, purely descriptive summary of the user's verified income pattern shown " +
-    "in the <income_data> block. Income-descriptive language only — never creditworthiness, " +
-    "lending, scoring, or financial-advice language.",
-  input_schema: {
-    type: "object",
-    properties: {
-      narrative: {
-        type: "string",
-        description:
-          "A short (2-4 sentence) plain-English paragraph describing the income pattern shown in " +
-          "the data. Descriptive only — no credit/lending/advice language.",
-      },
-      stabilityRating: {
-        type: "string",
-        enum: ["stable", "moderate", "variable"],
-        description: "How consistent the monthly income distribution is, based only on the data given.",
-      },
-      trendDirection: {
-        type: "string",
-        enum: ["increasing", "stable", "decreasing"],
-        description: "The overall direction of the monthly income distribution shown in the data.",
-      },
-      diversificationSummary: {
-        type: "string",
-        description: "One or two sentences describing how spread out the income is across platforms.",
-      },
-      notableObservations: {
-        type: "array",
-        items: { type: "string" },
-        description:
-          "Zero to four short, factual observations about the income pattern (e.g. a dominant " +
-          "source, a seasonal dip). Purely descriptive — never advice or a risk judgment.",
-      },
+export const INCOME_NARRATIVE_RESPONSE_SCHEMA: Schema = {
+  type: Type.OBJECT,
+  properties: {
+    narrative: {
+      type: Type.STRING,
+      description:
+        "A short (2-4 sentence) plain-English paragraph describing the income pattern shown in " +
+        "the data. Descriptive only — no credit/lending/advice language.",
     },
-    required: ["narrative", "stabilityRating", "trendDirection", "diversificationSummary", "notableObservations"],
+    stabilityRating: {
+      type: Type.STRING,
+      enum: ["stable", "moderate", "variable"],
+      description: "How consistent the monthly income distribution is, based only on the data given.",
+    },
+    trendDirection: {
+      type: Type.STRING,
+      enum: ["increasing", "stable", "decreasing"],
+      description: "The overall direction of the monthly income distribution shown in the data.",
+    },
+    diversificationSummary: {
+      type: Type.STRING,
+      description: "One or two sentences describing how spread out the income is across platforms.",
+    },
+    notableObservations: {
+      type: Type.ARRAY,
+      items: { type: Type.STRING },
+      description:
+        "Zero to four short, factual observations about the income pattern (e.g. a dominant " +
+        "source, a seasonal dip). Purely descriptive — never advice or a risk judgment.",
+    },
   },
+  required: ["narrative", "stabilityRating", "trendDirection", "diversificationSummary", "notableObservations"],
 };
 
 export const IncomeNarrativeOutputSchema = z.object({

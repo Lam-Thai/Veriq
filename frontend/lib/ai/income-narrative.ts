@@ -1,14 +1,13 @@
 import "server-only";
 import { createHash } from "node:crypto";
 import { db } from "@/lib/db";
-import { ai, AI_MODEL } from "@/lib/ai";
+import { ai, AI_MODEL, isAiConfigured } from "@/lib/ai";
 import { sanitizeAIInput } from "@/lib/ai-sanitize";
 import { distributeAcrossMonths, getUserConnections, type UserConnection } from "@/lib/dashboard-data";
 import { findPlatformBySlug } from "@/components/landing/platform-data";
 import {
   INCOME_NARRATIVE_SYSTEM_PROMPT,
-  INCOME_NARRATIVE_TOOL,
-  INCOME_NARRATIVE_TOOL_NAME,
+  INCOME_NARRATIVE_RESPONSE_SCHEMA,
   IncomeNarrativeOutputSchema,
   type IncomeNarrativeOutput,
 } from "@/lib/prompts/income-narrative";
@@ -17,7 +16,7 @@ import {
 // is reused as-is when BOTH hold, otherwise it is regenerated:
 //   1. `inputHash` still matches the user's current connections (nothing changed), AND
 //   2. it was generated less than STALE_AFTER_MS ago.
-// This keeps the dashboard card and the PDF report from calling Claude on every single page
+// This keeps the dashboard card and the PDF report from calling Gemini on every single page
 // load/report download, while still refreshing periodically even if verifiedAmount never changes
 // (e.g. if the prompt or model is updated later, a 24h TTL bounds how long a row can go stale).
 const STALE_AFTER_MS = 24 * 60 * 60 * 1000; // 24 hours
@@ -41,7 +40,7 @@ function computeInputHash(connections: UserConnection[]): string {
 }
 
 /**
- * Builds the user-message content sent to Claude. All platform-derived strings are sanitized
+ * Builds the user-message content sent to Gemini. All platform-derived strings are sanitized
  * before interpolation, and the whole block is wrapped in <income_data> tags — the system prompt
  * (lib/prompts/income-narrative.ts) instructs the model to treat everything inside that tag as
  * data to describe, never as instructions.
@@ -123,29 +122,53 @@ export async function generateIncomeNarrative(clerkId: string): Promise<IncomeNa
     // through and regenerate rather than serving malformed data.
   }
 
+  // GEMINI_API_KEY is optional at the env-schema level (see lib/env.ts) specifically so its
+  // absence never blocks the rest of the app — checked here, at first use, rather than at
+  // process boot. No cached row and no key configured means there is genuinely nothing to show;
+  // degrade the same way a network/model failure would, without ever attempting the call.
+  if (!isAiConfigured()) {
+    console.error("[income-narrative] GEMINI_API_KEY not configured — skipping generation", {
+      userId: user.id,
+    });
+    return { status: "error" };
+  }
+
   try {
-    const response = await ai.messages.create({
+    const response = await ai.models.generateContent({
       model: AI_MODEL,
-      max_tokens: 1024,
-      system: INCOME_NARRATIVE_SYSTEM_PROMPT,
-      tools: [INCOME_NARRATIVE_TOOL],
-      tool_choice: { type: "tool", name: INCOME_NARRATIVE_TOOL_NAME },
-      messages: [{ role: "user", content: buildPromptContent(connections) }],
+      contents: buildPromptContent(connections),
+      config: {
+        systemInstruction: INCOME_NARRATIVE_SYSTEM_PROMPT,
+        responseMimeType: "application/json",
+        responseSchema: INCOME_NARRATIVE_RESPONSE_SCHEMA,
+      },
     });
 
-    const toolUse = response.content.find(
-      (block): block is Extract<(typeof response.content)[number], { type: "tool_use" }> =>
-        block.type === "tool_use",
-    );
-    if (!toolUse) {
-      console.error("[income-narrative] no tool_use block in response", {
+    // Unlike Anthropic's tool_use block (already a parsed JS object), Gemini's JSON-mode output
+    // is raw text (`response.text`) that must be JSON.parse'd — and that parse can itself throw
+    // on malformed/truncated output. Treated exactly like the "model output failed validation"
+    // branch below: never throw, just log redacted metadata and return a typed error.
+    const rawText = response.text;
+    if (!rawText) {
+      console.error("[income-narrative] empty response text", {
         userId: user.id,
         durationMs: Date.now() - startedAt,
       });
       return { status: "error" };
     }
 
-    const parsed = IncomeNarrativeOutputSchema.safeParse(toolUse.input);
+    let candidate: unknown;
+    try {
+      candidate = JSON.parse(rawText);
+    } catch {
+      console.error("[income-narrative] model output was not valid JSON", {
+        userId: user.id,
+        durationMs: Date.now() - startedAt,
+      });
+      return { status: "error" };
+    }
+
+    const parsed = IncomeNarrativeOutputSchema.safeParse(candidate);
     if (!parsed.success) {
       console.error("[income-narrative] model output failed validation", {
         userId: user.id,
@@ -181,8 +204,8 @@ export async function generateIncomeNarrative(clerkId: string): Promise<IncomeNa
     // Metadata-only — no raw income figures, platform identifiers, or prompt/response content.
     console.log("[income-narrative] generated", {
       userId: user.id,
-      inputTokens: response.usage.input_tokens,
-      outputTokens: response.usage.output_tokens,
+      inputTokens: response.usageMetadata?.promptTokenCount,
+      outputTokens: response.usageMetadata?.candidatesTokenCount,
       durationMs: Date.now() - startedAt,
     });
 

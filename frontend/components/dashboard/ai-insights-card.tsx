@@ -33,7 +33,7 @@ const TREND_LABEL: Record<IncomeNarrativeOutput["trendDirection"], string> = {
 /**
  * Fetches the signed-in user's AI-generated income summary from /api/ai/income-insights on
  * mount. Kept client-side (rather than an RSC await in app/dashboard/page.tsx) because the
- * underlying Claude call can be slow — this must never block the dashboard's initial server
+ * underlying Gemini call can be slow — this must never block the dashboard's initial server
  * render. Renders all four states required by .claude/skills/design-system/SKILL.md: empty (no
  * connections — no AI call attempted), loading (skeleton, not a spinner blocking the whole
  * card), error (contained to this card — never breaks the rest of the dashboard), and populated.

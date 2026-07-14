@@ -5,7 +5,7 @@ export type ReportSourceRow = {
   amount: number;
 };
 
-// AI-generated (Claude), income-descriptive-only summary — see lib/ai/income-narrative.ts.
+// AI-generated (Gemini), income-descriptive-only summary — see lib/ai/income-narrative.ts.
 // Optional and additive: the caller (app/api/report/route.tsx) populates this only when
 // generation succeeds, so a failed/rate-limited/slow AI call still lets the rest of the report
 // render in full.
