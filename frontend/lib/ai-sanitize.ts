@@ -8,13 +8,21 @@
  *
  * - Strips null bytes (defends against injected control characters).
  * - Strips HTML/XML-like tags (defends against markup smuggled into a rendered narrative).
+ *   Repeats the tag-strip pass to a fixed point rather than replacing once — a single pass
+ *   can leave a tag behind on crafted nested input (e.g. "<<script>script>" strips to
+ *   "<script>" after just one pass); looping until nothing changes closes that bypass
+ *   (CodeQL js/incomplete-multi-character-sanitization).
  * - Trims surrounding whitespace.
  * - Caps length so one field can't blow the prompt token budget.
  */
 export function sanitizeAIInput(raw: string, maxLength = 4000): string {
-  return raw
-    .replace(/\x00/g, "")
-    .replace(/<[^>]*>/g, "")
-    .trim()
-    .slice(0, maxLength);
+  let sanitized = raw.replace(/\x00/g, "");
+
+  let previous: string;
+  do {
+    previous = sanitized;
+    sanitized = sanitized.replace(/<[^>]*>/g, "");
+  } while (sanitized !== previous);
+
+  return sanitized.trim().slice(0, maxLength);
 }
