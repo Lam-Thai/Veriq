@@ -23,6 +23,7 @@ model User {
 
   subscription        Subscription?
   platformConnections PlatformConnection[]
+  incomeNarrative     IncomeNarrative?
 
   @@index([clerkId])
 }
@@ -66,4 +67,32 @@ model PlatformConnection {
   updatedAt      DateTime @updatedAt @db.Timestamptz(3)
 
   @@unique([userId, slug])
+}
+
+// Cached AI-generated (Claude) descriptive summary of a user's verified income — see
+// lib/ai/income-narrative.ts. One row per user. Regenerated when `inputHash` (a hash of the
+// user's current per-platform verifiedAmounts) no longer matches the latest connection state, or
+// when `generatedAt` is older than the service's staleness window — whichever comes first. This
+// exists purely so the dashboard card and the PDF report don't call Claude on every single page
+// load/report download; it is never treated as a source of truth for verifiedAmount itself.
+model IncomeNarrative {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Descriptive only — never a credit/lending score. See lib/prompts/income-narrative.ts.
+  narrative              String
+  stabilityRating        String
+  trendDirection         String
+  diversificationSummary String
+  notableObservations    String[]
+
+  // sha256 of the sorted `slug:verifiedAmount` pairs used to generate this row — see
+  // lib/ai/income-narrative.ts's computeInputHash. Changes whenever a connection is added,
+  // removed, or its verifiedAmount changes.
+  inputHash   String
+  generatedAt DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId])
 }

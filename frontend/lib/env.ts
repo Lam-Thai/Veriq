@@ -17,6 +17,9 @@ const EnvSchema = z.object({
   STRIPE_PRICE_ID_PRO: z.string().startsWith("price_"),
   // Stripe Price ID for the Enterprise plan (test mode).
   STRIPE_PRICE_ID_ENTERPRISE: z.string().startsWith("price_"),
+  // Server-side only — powers the AI income-narrative feature (lib/ai.ts). Never exposed via
+  // NEXT_PUBLIC_ and never logged.
+  ANTHROPIC_API_KEY: z.string().startsWith("sk-ant-"),
 });
 
 // `next build`'s "Collecting page data" step imports every route module to statically analyze
@@ -43,6 +46,7 @@ const BUILD_PLACEHOLDERS: Record<keyof z.infer<typeof EnvSchema>, string> = {
   NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: "pk_test_buildplaceholder",
   STRIPE_PRICE_ID_PRO: "price_buildplaceholder",
   STRIPE_PRICE_ID_ENTERPRISE: "price_buildplaceholder",
+  ANTHROPIC_API_KEY: "sk-ant-buildplaceholder",
 };
 
 function loadEnv(): z.infer<typeof EnvSchema> {

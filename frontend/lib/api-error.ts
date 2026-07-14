@@ -12,6 +12,8 @@ export const ApiError = {
     NextResponse.json({ error: { code: "UNAUTHORIZED", message: "Authentication required" } }, { status: 401 }),
   notFound: () => NextResponse.json({ error: { code: "NOT_FOUND", message: "Not found" } }, { status: 404 }),
   conflict: (code: string, message: string) => NextResponse.json({ error: { code, message } }, { status: 409 }),
+  tooManyRequests: () =>
+    NextResponse.json({ error: { code: "RATE_LIMITED", message: "Too many requests — try again shortly." } }, { status: 429 }),
   internal: () =>
     NextResponse.json({ error: { code: "INTERNAL", message: "Something went wrong" } }, { status: 500 }),
   unprocessable: (err: ZodError) =>
