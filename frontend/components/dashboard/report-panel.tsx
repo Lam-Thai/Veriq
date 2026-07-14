@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { PillButton } from "@/components/ui/pill-button";
 import { CheckBadgeIcon } from "@/components/ui/icons";
@@ -7,8 +8,10 @@ type ReportPanelProps = {
 };
 
 /**
- * No client JS needed here — the PDF download is a plain navigation to a route that responds
- * with Content-Disposition: attachment (app/api/report/route.ts), same as any static file link.
+ * "Download report" stays a quick-download affordance (plain navigation to a route that
+ * responds with Content-Disposition: attachment, app/api/report/route.tsx — no client JS
+ * needed for that click) with every connected platform included. The second link sends users
+ * to /dashboard/report to pick a subset of platforms before generating.
  */
 export function ReportPanel({ hasConnections }: ReportPanelProps) {
   return (
@@ -23,7 +26,7 @@ export function ReportPanel({ hasConnections }: ReportPanelProps) {
           : "Connect at least one platform on the Overview tab to generate your report."}
       </p>
 
-      <div className="mt-6">
+      <div className="mt-6 flex flex-col items-center gap-3">
         {hasConnections ? (
           <PillButton as="a" href="/api/report">
             Download report
@@ -31,6 +34,9 @@ export function ReportPanel({ hasConnections }: ReportPanelProps) {
         ) : (
           <PillButton disabled>Download report</PillButton>
         )}
+        <PillButton as={Link} href="/dashboard/report" variant="secondary-light" size="compact">
+          {hasConnections ? "Customize & view full report" : "View report page"}
+        </PillButton>
       </div>
     </Card>
   );

@@ -49,7 +49,7 @@ export function Nav() {
               Sign in
             </Link>
           </Show>
-          <PillButton as="a" href="#" variant="primary" size="compact">
+          <PillButton as={Link} href="/dashboard/report" variant="primary" size="compact">
             Generate Report
           </PillButton>
         </div>
