@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { cn } from "@/lib/cn";
 
 type BrandLogoProps = {
@@ -21,20 +22,15 @@ export function BrandLogo({ href, className }: BrandLogoProps) {
         className,
       )}
     >
-      <span
+      <Image
+        src="/Veriq.png"
+        alt=""
         aria-hidden="true"
-        className="flex h-6 w-6 items-center justify-center rounded-sm bg-primary"
-      >
-        <svg viewBox="0 0 16 16" fill="none" className="h-3.5 w-3.5">
-          <path
-            d="M3 8.5L6 11.5L13 4"
-            stroke="white"
-            strokeWidth="1.8"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-      </span>
+        width={32}
+        height={32}
+        priority
+        className="h-8 w-8 shrink-0 rounded-sm"
+      />
       <span className="text-(length:--type-button-utility-size) font-bold text-white">
         Veriq
       </span>
