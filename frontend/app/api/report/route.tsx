@@ -79,19 +79,27 @@ export async function GET(request: NextRequest) {
   // try/catch and left undefined (report renders without the AI section) on any failure —
   // generateIncomeNarrative itself already never throws, but this belongs to the caller's
   // contract, not something route.tsx should assume holds forever.
+  //
+  // Only attach it when the user didn't filter the report down to a subset: the narrative always
+  // describes the full connection set, so pairing it with a report whose totals/by-source table
+  // reflect a smaller, hand-picked selection would show numbers and prose that describe two
+  // different datasets in the same lender-facing document — worse than just omitting the summary.
   let narrative: ReportNarrative | undefined;
-  try {
-    const narrativeResult = await generateIncomeNarrative(clerkUser.id);
-    if (narrativeResult.status === "ok") {
-      narrative = {
-        text: narrativeResult.data.narrative,
-        stabilityRating: narrativeResult.data.stabilityRating,
-        trendDirection: narrativeResult.data.trendDirection,
-        diversificationSummary: narrativeResult.data.diversificationSummary,
-      };
+  const isFullSelection = selectedConnections.length === connections.length;
+  if (isFullSelection) {
+    try {
+      const narrativeResult = await generateIncomeNarrative(clerkUser.id);
+      if (narrativeResult.status === "ok") {
+        narrative = {
+          text: narrativeResult.data.narrative,
+          stabilityRating: narrativeResult.data.stabilityRating,
+          trendDirection: narrativeResult.data.trendDirection,
+          diversificationSummary: narrativeResult.data.diversificationSummary,
+        };
+      }
+    } catch (err) {
+      console.error("[report] income narrative unavailable, rendering report without it", err);
     }
-  } catch (err) {
-    console.error("[report] income narrative unavailable, rendering report without it", err);
   }
 
   if (narrative) data.narrative = narrative;
