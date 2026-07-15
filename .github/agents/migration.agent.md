@@ -26,6 +26,15 @@ ask what you can reasonably infer.
 - Additive or destructive change? (see classification below)
 - Is the table already populated in production, or still pre-launch (no live data risk)?
 - Does any FastAPI service read this table — does its SQLAlchemy mirror model need updating too?
+- **Is the migration you're fixing/extending already applied to any real database** (even just
+  local dev)? If yes, never hand-edit its `migration.sql` — see "Fixing an Already-Applied
+  Migration" below; the fix is always a new migration, never a rewrite of the old file.
+- Does the change include a `@@index([field])` on a field that already has `@unique`? Postgres's
+  unique constraint already provides that index — flag and remove the redundant one rather than
+  adding to it.
+- Does the change include a `DateTime` field with no `@db.Timestamptz(3)`? Bare `DateTime` maps
+  to plain `TIMESTAMP` (no time zone) on Postgres, not `TIMESTAMPTZ` — inconsistent with the rest
+  of a schema that otherwise uses it is a real, previously-shipped bug in this repo.
 
 ---
 
@@ -84,6 +93,39 @@ Step 3 → Add NOT NULL:
 In Prisma: two separate migrations — one for nullable add, one after backfill to add `@default`.
 
 ---
+
+## Fixing an Already-Applied Migration
+
+Prisma tracks every applied migration's file content by checksum in `_prisma_migrations`.
+Editing a `migration.sql` file **after** it's been applied — even to a local dev DB, even for a
+one-line fix like dropping a redundant index — desyncs that checksum from what's actually in the
+migrations directory, and `prisma migrate status`/`deploy` will report drift. The old file stays
+untouched, always; the fix is a **new** migration on top of it:
+
+1. Update `prisma/schema.prisma` with the corrected model.
+2. Run `prisma migrate dev --name <fix-description>` to generate a new migration capturing just
+   the diff (e.g. a `DropIndex` + an `AlterTable ... TYPE` statement).
+3. Verify the old migration's file is untouched (`git diff` should show zero changes to it) and
+   the new one applied cleanly.
+
+## Type-Widening a Timestamp Column (`TIMESTAMP` → `TIMESTAMPTZ`)
+
+Before running `ALTER TABLE ... ALTER COLUMN ... TYPE TIMESTAMPTZ` on a column that might already
+have rows, don't assume it's a no-op. Postgres reinterprets existing naive `TIMESTAMP` values
+using the **database session's current `TimeZone` setting** at the moment the `ALTER` runs — if
+that setting differs from the timezone the application was actually writing values in, the
+conversion silently shifts every existing timestamp by the offset between the two.
+
+Check before applying, not after:
+1. Does the table already have rows? (`SELECT count(*) FROM "Table"` or check server logs / recent
+   feature activity — don't assume "just added this session" means "definitely empty.")
+2. What is `SHOW TimeZone` (or `SELECT current_setting('TimeZone')`) for the session/role the
+   migration will run under?
+3. Read back one or two existing values and confirm what timezone the app actually wrote them in
+   (check the app code that sets the field, e.g. `new Date()` in Node is always UTC-based
+   internally regardless of server locale).
+4. Only proceed if (2) and (3) match — document that check in the rollback plan (see below) rather
+   than asserting safety without having looked.
 
 ## Backfill Script Pattern
 
@@ -169,4 +211,9 @@ Data loss on rollback: NO
 - [ ] Index creation uses CONCURRENTLY (Prisma handles this via `@@index`)
 - [ ] No Alembic migrations competing with Prisma on shared tables
 - [ ] `prisma migrate deploy` used in CI/CD — not `migrate dev`
+- [ ] No plain `@@index([field])` duplicates a field's own `@unique` index
+- [ ] Every `DateTime` representing a real point in time has `@db.Timestamptz(3)`
+- [ ] An already-applied migration's `.sql` file was never hand-edited — a fix is a new migration
+- [ ] Any `TIMESTAMP` → `TIMESTAMPTZ` widening checked against existing rows and the session
+      timezone before being assumed safe (see "Type-Widening a Timestamp Column" above)
 - [ ] Passes `engineering-standards.skill.md` Definition of Done

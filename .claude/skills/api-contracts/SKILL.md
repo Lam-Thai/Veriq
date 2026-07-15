@@ -35,7 +35,7 @@ Never deviate from this shape. Clients depend on it.
 | `409` | Conflict — duplicate resource (unique constraint) |
 | `413` | Payload too large (file upload) |
 | `422` | Valid syntax, failed business validation |
-| `429` | Rate limit exceeded |
+| `429` | Rate limit exceeded — include a `Retry-After` header (seconds), derived from the limiter's actual window/reset time, not a guessed constant |
 | `500` | Internal server error — never leak details |
 
 ---
@@ -51,7 +51,10 @@ export const ApiError = {
   forbidden:        () => NextResponse.json({ error: { code: 'FORBIDDEN', message: 'Access denied' } }, { status: 403 }),
   notFound:         () => NextResponse.json({ error: { code: 'NOT_FOUND', message: 'Not found' } }, { status: 404 }),
   conflict:         () => NextResponse.json({ error: { code: 'CONFLICT', message: 'Already exists' } }, { status: 409 }),
-  tooManyRequests:  () => NextResponse.json({ error: { code: 'RATE_LIMITED', message: 'Too many requests' } }, { status: 429 }),
+  tooManyRequests:  (retryAfterSeconds: number) => NextResponse.json(
+    { error: { code: 'RATE_LIMITED', message: 'Too many requests' } },
+    { status: 429, headers: { 'Retry-After': String(Math.max(0, retryAfterSeconds)) } },
+  ),
   internal:         () => NextResponse.json({ error: { code: 'INTERNAL', message: 'Something went wrong' } }, { status: 500 }),
   unprocessable: (err: ZodError) => NextResponse.json({
     error: { code: 'VALIDATION_FAILED', message: 'Validation failed', fields: err.flatten().fieldErrors }
@@ -129,3 +132,7 @@ const res = await fetch(`${process.env.FASTAPI_URL}/process`, {
 - Never leak internal field names, column names, or stack traces.
 - Always `Content-Type: application/json` on every response.
 - `404` — not `403` — for resource ownership failures (IDOR protection).
+- A `429` always carries a `Retry-After` header computed from the rate limiter's own reset time
+  (e.g. `Math.ceil((resetAt - Date.now()) / 1000)`), never a hardcoded guess — the limiter should
+  expose its window's reset timestamp precisely so the route can compute this, not just a
+  boolean `success`.

@@ -27,6 +27,25 @@ class CreateInvoiceRequest(BaseModel):
     note: str | None = Field(None, max_length=1000)
 ```
 
+### Fixed-point sanitization for free-text fields (not just shape validation)
+Validating a field's *shape* (zod/pydantic above) is separate from sanitizing its *content* when
+that content will be re-embedded somewhere else (HTML, a prompt, a shell command). A single-pass
+`.replace()` of a repeating pattern can leave a match behind on crafted nested/overlapping input —
+e.g. `raw.replace(/<[^>]*>/g, '')` turns `"<<script>script>"` into `"<script>"`, not `""`, because
+removing the inner tag exposes a new one that the single pass already finished scanning past. This
+is CodeQL's `js/incomplete-multi-character-sanitization`, and a real finding this repo shipped and
+then fixed. Loop any such replace to a fixed point instead:
+```ts
+let sanitized = raw
+let previous: string
+do {
+  previous = sanitized
+  sanitized = sanitized.replace(/<[^>]*>/g, "")
+} while (sanitized !== previous)
+```
+See the `ai-integration` skill's "Input Sanitization" section for the full real example
+(`lib/ai-sanitize.ts`).
+
 ---
 
 ## Authentication Cookies (Next.js)
@@ -61,14 +80,40 @@ export async function createServiceToken(userId: string, role: string): Promise<
 
 ## Rate Limiting
 
-> **Repo reality check**: `@upstash/ratelimit` is not installed and no Redis/Upstash instance is
-> configured anywhere in this repo as of this writing. Don't import `@/lib/ratelimit` — it
-> doesn't exist yet. Until it's actually set up, note the rate-limiting gap explicitly in your
-> output (e.g. "no rate limit applied — no infra installed yet") rather than silently omitting it
-> or fabricating an import that will fail to resolve. The pattern below is the target shape for
-> when that infra is added, not a claim it's already there.
+> **Repo reality check**: `@upstash/ratelimit`/Redis is still not installed as of this writing —
+> for a *multi-instance* deployment you'd want it, since the pattern below only coordinates within
+> one process. But `lib/rate-limit.ts` **does now exist and is real, working, in-process code**
+> (built for the AI income-narrative feature) — a module-scoped `Map`-based fixed-window limiter
+> keyed by an arbitrary string. Use it (`import { checkRateLimit } from '@/lib/rate-limit'`)
+> instead of either fabricating an Upstash import that isn't installed, or reinventing another
+> in-process limiter from scratch. Swap it for Upstash once real multi-instance/serverless scale
+> makes the single-instance limitation (state resets on redeploy/cold start, doesn't coordinate
+> across instances) actually matter.
 
-### Next.js (Upstash)
+### Next.js — real, working in-process limiter (current default)
+```ts
+// lib/rate-limit.ts (already exists — this is what it looks like)
+export type RateLimitResult = { success: boolean; remaining: number; resetAt: number }
+
+// In route: limit per userId (not IP — spoofable). `resetAt` (epoch ms) is when the caller's
+// current window ends — always derive a 429's Retry-After header from it, never guess a value.
+const { success, resetAt } = checkRateLimit(`feature:${clerkUser.id}`, 10, 60_000)
+if (!success) return ApiError.tooManyRequests(Math.ceil((resetAt - Date.now()) / 1000))
+```
+If the thing you're rate-limiting itself has a **shared** quota across all users — e.g. a
+free-tier third-party API billed/limited per project, not per caller — add a second, unkeyed
+check (same literal key for every request) alongside the per-user one; a per-user limit alone
+does nothing to stop many different users collectively exceeding a quota that isn't actually
+partitioned by user. See the `ai-integration` skill's "Free-tier realities" section for the
+concrete example this pattern came from.
+
+**Cleanup cost**: if the limiter does opportunistic cleanup of expired entries once its map grows
+past a threshold, throttle that sweep (e.g. "at most once per N seconds") rather than running a
+full scan on every call once you're over the threshold — otherwise, for as long as the map stays
+above threshold, *every single call* pays an O(n) scan even though most entries haven't expired
+yet. `lib/rate-limit.ts` does this with a `lastCleanupMs` guard.
+
+### Next.js (Upstash — target shape once multi-instance scale needs it)
 ```ts
 // lib/ratelimit.ts
 import { Ratelimit } from '@upstash/ratelimit'
@@ -170,6 +215,31 @@ and confirm `next build` now succeeds (with a visible warning) *and* that `next 
 throws for a route that genuinely needs the missing var — don't just trust the logic on paper.
 See also "Third-Party SDK Production Verification" below for the related-but-different Clerk
 case, where the SDK itself (not your own zod schema) degrades ungracefully outside `next dev`.
+
+### Required vs. optional secrets in one monolithic schema
+`EnvSchema.safeParse(process.env)` validates **every field together in one call** — a real bug
+this repo hit: `lib/env.ts` is imported transitively by `lib/db.ts`, which nearly every
+authenticated page touches, so adding a new *required* field for one specific, genuinely optional
+feature (an additive AI narrative card) 500'd the entire dashboard page whenever that one field
+was unset — not just the feature that needed it. `next build`'s build-phase placeholder mechanism
+above doesn't help here; that only relaxes validation for the literal build step, not for
+`next dev`/`next start`/a real deployment, which is exactly when this bug fired.
+
+The fix: if a feature's own spec says it must be additive/non-blocking, its secret must be
+`.optional()` in the schema, with the feature's own code checking for its presence at the point of
+use and degrading gracefully — not the shared env module deciding for it at process boot:
+```ts
+GEMINI_API_KEY: z.string().min(1).optional(),   // optional — this feature must degrade, not 500 unrelated pages
+```
+```ts
+// lib/ai.ts — construct with `?? ""`, never `undefined`, so this module-scope statement can't
+// throw on import either; the real check happens in the service, before attempting the call.
+export const ai = new GoogleGenAI({ apiKey: env.GEMINI_API_KEY ?? "" })
+export function isAiConfigured(): boolean { return Boolean(env.GEMINI_API_KEY) }
+```
+Ask, for every new required field you add to a shared env schema: "if this is unset, does *only*
+the feature that needs it break, or does it take unrelated pages down with it?" If the latter and
+the feature isn't supposed to be load-bearing for the rest of the app, it needs to be optional.
 
 ### `server-only` guard on modules that read secret env vars
 Any module that imports `env` from `lib/env.ts` to read a server secret (not a `NEXT_PUBLIC_*`
@@ -293,7 +363,7 @@ treat them as required, not optional.
 |---|---|---|
 | Validation | `zod` | `pydantic` |
 | Auth | Clerk (`@clerk/nextjs`) | `python-jose` |
-| Rate limit | `@upstash/ratelimit` | `slowapi` |
+| Rate limit | `lib/rate-limit.ts` (in-process, real) → `@upstash/ratelimit` at multi-instance scale | `slowapi` |
 | Password hash | `bcryptjs` (12 rounds) | `passlib[bcrypt]` |
 | Token sign/verify | `jose` | `python-jose` |
 | Env validation | `zod` on `process.env` | `pydantic-settings` |
@@ -304,3 +374,10 @@ treat them as required, not optional.
 - No PII in logs.
 - 404 for ownership failures — never 403.
 - `npm audit` / `pip audit` in CI at `high` level.
+- Every external network call (third-party API, AI provider, webhook forward) has an explicit
+  timeout (`AbortController` in TS, `httpx` timeout in Python) — don't rely on the callee's own
+  timeout behavior, and always clear the timer/task on completion so a normal response doesn't
+  leave one dangling.
+- A required field in a shared, monolithically-validated env schema must actually need to be
+  required for the *whole app* to function — an additive/optional feature's secret belongs in
+  `.optional()`, checked at its own point of use (see "Required vs. optional secrets" above).
