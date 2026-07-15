@@ -99,6 +99,59 @@ except Exception:
     raise  # re-raise — never swallow unknowns
 ```
 
+### Bounding an external call with a timeout (TypeScript)
+Never let a `fetch`/SDK call to something outside your process block a request indefinitely —
+bound it with your own timeout, and always clear the timer so a normal completion doesn't leave
+one dangling:
+```ts
+const controller = new AbortController()
+const timeoutId = setTimeout(() => controller.abort(), 20_000)
+try {
+  const response = await someExternalCall({ signal: controller.signal })
+  // ... use response
+} catch (err) {
+  // an aborted call rejects too — this same catch handles both a real failure and a timeout
+  logger.error({ err, context: 'someExternalCall' }, 'Failed or timed out')
+  throw err
+} finally {
+  clearTimeout(timeoutId)
+}
+```
+The provider/API on the other end may only stop *your* wait, not its own processing or billing
+for a request it already received — check the SDK's own docs on what aborting actually does
+server-side before assuming it's a true cancellation.
+
+### Cancelling a client-side fetch on unmount (React)
+A component that fetches on mount and sets state from the response should cancel that fetch when
+it unmounts — otherwise the request keeps running server-side for no reason, and (without a guard)
+a late response can call `setState` after unmount:
+```tsx
+useEffect(() => {
+  let cancelled = false
+  const controller = new AbortController()
+
+  async function load() {
+    try {
+      const res = await fetch('/api/thing', { signal: controller.signal })
+      if (cancelled) return
+      setState(await res.json())
+    } catch {
+      // an AbortError from the cleanup below also lands here — `cancelled` is already true by
+      // then, so this guard skips setState rather than flashing an error post-unmount
+      if (!cancelled) setState({ phase: 'error' })
+    }
+  }
+
+  void load()
+  return () => {
+    cancelled = true
+    controller.abort()
+  }
+}, [])
+```
+The `cancelled` flag and the `AbortController` do two different jobs — the flag stops a stale
+response from touching state, the abort actually stops the in-flight request. Use both.
+
 ---
 
 ## Structured Logging

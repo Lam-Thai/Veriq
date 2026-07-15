@@ -122,6 +122,38 @@ try {
 }
 ```
 
+### Rate Limit `/api/checkout` — Real Finding, Now Fixed
+The Checkout route makes 1-2 real outbound Stripe API calls per request (`customers.create`,
+`checkout.sessions.create`); with no rate limit, one user could hammer it — piling up abandoned
+Checkout Sessions and orphaned Customers, and burning Stripe API quota — for free, since the
+still-billable guard above only blocks a *repeat* purchase, not rapid-fire attempts before any
+subscription exists yet. Rate limit it the same way `ai/income-insights` and `report` already do:
+```ts
+const { success, resetAt } = checkRateLimit(`checkout:${clerkUser.id}`, 5, 60_000)
+if (!success) return ApiError.tooManyRequests(Math.ceil((resetAt - Date.now()) / 1000))
+```
+Generous enough for a legitimate double-click retry, tight enough to bound cost/quota exposure.
+
+### A Third, Distinct Race: Two Live Checkout Sessions Before the First Webhook Lands
+The still-billable guard (above) only blocks a *second* subscribe attempt once the local
+`Subscription.status` has already flipped to `ACTIVE`/`TRIALING`/`PAST_DUE` — which only happens
+once the webhook for the *first* payment lands. For a brand-new user (`status: "INCOMPLETE"`),
+two concurrent requests (two tabs, or a slow-network retry racing a resubmit) both pass that
+check, both reuse the same `stripeCustomerId`, and both get a **valid, independent** Stripe
+Checkout Session back. If the user completes payment on both before the first webhook arrives,
+Stripe creates two real subscriptions against the same customer — a genuine double charge this
+repo's rate-limit fix (above) narrows the window on but does not fully close. This is distinct
+from the DB-row race documented above (that one is about the local table; this one is about two
+live, independently-valid Stripe Checkout Sessions existing at once). Two possible remediations,
+neither applied yet because both change checkout UX in a way that's a product decision, not a
+pure bug fix:
+1. `stripe.checkout.sessions.expire()` any prior open session for the customer before creating a
+   new one — but this would silently invalidate a tab the user still has open with a live Stripe
+   payment page loaded.
+2. A short per-user lock (not just a rate limit) on `/api/checkout` for the duration of an
+   in-flight request.
+Decide with product before implementing either — don't silently pick one.
+
 ---
 
 ## Webhooks
@@ -203,8 +235,19 @@ never manually invent or hardcode a `whsec_` value.
 - Block a second Checkout Session for a user with a still-billable subscription.
 - Handle the create-race on first-time Stripe Customer creation — don't ship the naive
   `findUnique` → `create` with no conflict handling.
+- Rate limit `/api/checkout` per `userId` via `lib/rate-limit.ts` — every call makes real outbound
+  Stripe requests (see "Rate Limit `/api/checkout`" above).
 - Sync webhook data by update, not by upsert-that-can-create — a webhook shouldn't be able to
   synthesize a local record with no `userId`.
 - Format-validate any client-supplied id before using it in a call to the payment provider from
   an unauthenticated route.
 - No real/live keys ever hardcoded or committed — same as any other secret.
+
+## Known Gap: No Test Coverage on the Guards Above
+As of this writing, `e2e/pricing.spec.ts` only covers the pricing page's UI (headings, prices,
+button presence) and explicitly skips clicking Subscribe, since that would hit the real
+`/api/checkout`. There is no unit/integration test for the still-billable guard, the
+create-race handler, or webhook signature verification — exactly the guards this skill documents
+as real, previously-shipped findings. Nothing currently catches a regression in any of them. When
+next touching this area, route test-writing through the `testing` agent rather than treating "the
+skill documents it" as equivalent to "it's covered."

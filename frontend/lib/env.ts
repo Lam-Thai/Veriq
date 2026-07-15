@@ -17,6 +17,19 @@ const EnvSchema = z.object({
   STRIPE_PRICE_ID_PRO: z.string().startsWith("price_"),
   // Stripe Price ID for the Enterprise plan (test mode).
   STRIPE_PRICE_ID_ENTERPRISE: z.string().startsWith("price_"),
+  // Server-side only — powers the AI income-narrative feature (lib/ai.ts). Never exposed via
+  // NEXT_PUBLIC_ and never logged. A plain non-empty check rather than a prefix assumption (e.g.
+  // "AIza...") because Google AI Studio key formats aren't reliably confirmed to be stable across
+  // all current key-issuance paths — a wrong prefix guess would risk rejecting a real valid key.
+  //
+  // Optional, unlike every other secret in this schema: the AI narrative feature is explicitly
+  // additive/non-blocking (dashboard and report must render fully without it). Every field in
+  // this schema is validated together in one `safeParse` below, and this file is imported
+  // transitively by lib/db.ts -> lib/dashboard-data.ts -> the dashboard page — so making this
+  // field required would mean a missing AI key 500s the *entire* dashboard, not just the AI
+  // card. lib/ai/income-narrative.ts checks for its presence itself and degrades to a typed
+  // "error" result when absent, so validation happens at first *use*, not at process boot.
+  GEMINI_API_KEY: z.string().min(1).optional(),
 });
 
 // `next build`'s "Collecting page data" step imports every route module to statically analyze
@@ -43,6 +56,7 @@ const BUILD_PLACEHOLDERS: Record<keyof z.infer<typeof EnvSchema>, string> = {
   NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: "pk_test_buildplaceholder",
   STRIPE_PRICE_ID_PRO: "price_buildplaceholder",
   STRIPE_PRICE_ID_ENTERPRISE: "price_buildplaceholder",
+  GEMINI_API_KEY: "gemini-buildplaceholder",
 };
 
 function loadEnv(): z.infer<typeof EnvSchema> {

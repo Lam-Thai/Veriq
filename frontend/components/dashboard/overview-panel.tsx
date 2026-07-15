@@ -1,6 +1,7 @@
 import { Card } from "@/components/ui/card";
 import { MonthlyBarChart } from "@/components/ui/monthly-bar-chart";
 import { ConnectionsPanel } from "@/components/dashboard/connections-panel";
+import { AiInsightsCard } from "@/components/dashboard/ai-insights-card";
 import { toBarHeights, type DashboardStats } from "@/lib/dashboard-data";
 
 const CURRENCY = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
@@ -35,6 +36,10 @@ export function OverviewPanel({ stats, connectedSlugs }: OverviewPanelProps) {
           <span className="text-(length:--type-fine-print-size) text-ink-muted-48">All sources</span>
         </div>
         <MonthlyBarChart bars={bars} trackHeightClassName="h-36" />
+      </div>
+
+      <div className="mt-8">
+        <AiInsightsCard hasConnections={connectedSlugs.length > 0} />
       </div>
 
       <div className="mt-10">

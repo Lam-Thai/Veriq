@@ -11,13 +11,19 @@ description: Shared PostgreSQL guidance for both Prisma and SQLAlchemy — data 
 |---|---|---|---|
 | Monetary | `DECIMAL(10,2)` | `Decimal @db.Decimal(10,2)` | `Numeric(10,2)` |
 | IDs (internal) | `TEXT` | `String @default(cuid())` | `String` |
-| Timestamps | `TIMESTAMPTZ` | `DateTime` | `DateTime(timezone=True)` |
+| Timestamps | `TIMESTAMPTZ` | `DateTime @db.Timestamptz(3)` — **not** bare `DateTime`, see note below | `DateTime(timezone=True)` |
 | Short strings | `VARCHAR(255)` | `String @db.VarChar(255)` | `String(255)` |
 | Long text | `TEXT` | `String` | `Text` |
 | JSON | `JSONB` | `Json` | `JSONB` |
 | Enums | `ENUM` | `enum` | `Enum` |
 
 **Never use `FLOAT` / `REAL` for monetary values — precision errors compound.**
+
+**Prisma's `DateTime` does not default to `TIMESTAMPTZ`** — on Postgres it maps to plain
+`TIMESTAMP(3)` (no time zone) unless you add `@db.Timestamptz(3)` explicitly. A model added
+without that annotation, inconsistent with the rest of the schema, is a real bug this repo
+shipped and then fixed with a follow-up migration. Check every new `DateTime` field against this;
+don't assume the base type is timezone-aware just because Postgres itself supports `TIMESTAMPTZ`.
 
 ## Indexing Strategy
 ```sql
@@ -35,6 +41,12 @@ CREATE INDEX CONCURRENTLY ON "Invoice" (customer_id);
 ```
 
 **Index when the column appears in:** `WHERE`, `ORDER BY`, `JOIN ON`, or is a foreign key.
+
+**Don't index a column that's already `UNIQUE`.** A unique constraint is backed by its own index
+automatically — a separate plain index on that identical single column is pure duplication (extra
+storage, extra write cost, no query benefit). This is distinct from a *composite* index that
+merely starts with a unique column (`(user_id, created_at)` when `user_id` alone is unique
+elsewhere) — that's still useful for the compound lookup.
 
 ## Pagination
 

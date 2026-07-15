@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { currentUser } from "@clerk/nextjs/server";
 import { z } from "zod";
 import { ApiError } from "@/lib/api-error";
+import { checkRateLimit } from "@/lib/rate-limit";
 import { db } from "@/lib/db";
 import { stripe } from "@/lib/stripe";
 import { PAID_PLAN_IDS, STRIPE_PRICE_BY_PLAN } from "@/lib/stripe-price-map";
@@ -21,6 +22,12 @@ const BodySchema = z.object({
   planId: z.enum(PAID_PLAN_IDS),
 });
 
+// Generous enough for a legitimate double-click retry, tight enough to bound both outbound
+// Stripe API cost (each call makes 1-2 real Stripe requests) and how many abandoned Checkout
+// Sessions/orphaned Customers one user can pile up by hammering this route.
+const RATE_LIMIT = 5;
+const RATE_LIMIT_WINDOW_MS = 60_000;
+
 /**
  * Starts a Stripe Checkout session for the signed-in user to subscribe to a paid plan.
  * The client only ever sends an abstract `planId` ("pro" | "enterprise") — never a raw Stripe
@@ -33,6 +40,9 @@ export async function POST(request: NextRequest) {
   try {
     const clerkUser = await currentUser();
     if (!clerkUser) return ApiError.unauthorized();
+
+    const { success, resetAt } = checkRateLimit(`checkout:${clerkUser.id}`, RATE_LIMIT, RATE_LIMIT_WINDOW_MS);
+    if (!success) return ApiError.tooManyRequests(Math.ceil((resetAt - Date.now()) / 1000));
 
     const body: unknown = await request.json().catch(() => null);
     const parsed = BodySchema.safeParse(body);

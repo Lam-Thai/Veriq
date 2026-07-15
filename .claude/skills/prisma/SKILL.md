@@ -67,6 +67,21 @@ enum InvoiceStatus { DRAFT SENT PAID VOID }
 - Enums for fixed value sets — never raw strings.
 - `onDelete: Cascade` on child relations. `Restrict` when accidental cascade is dangerous.
 - Every FK column has `@@index`.
+- **Never `@@index([field])` on a field that already has `@unique`.** Postgres backs a `@unique`
+  column with its own unique index automatically — a plain `@@index` on that exact same single
+  column creates a second, redundant index: extra storage and extra write overhead on every
+  insert/update, zero additional query benefit. This is a real finding this repo shipped and then
+  fixed (`IncomeNarrative.userId` had both `@unique` and a redundant `@@index([userId])`; the fix
+  removed the `@@index` and dropped the now-unneeded `IncomeNarrative_userId_idx` in a follow-up
+  migration). A *composite* index that merely starts with a unique column (`@@index([userId, foo])`)
+  is a different, legitimate case — the redundancy is specifically single-column-index-on-a-
+  single-unique-column.
+- **Every `DateTime` that represents a real point in time needs `@db.Timestamptz(3)` explicitly.**
+  A bare `DateTime` field does *not* default to `TIMESTAMPTZ` on Postgres — it maps to plain
+  `TIMESTAMP(3)` (no time zone) unless you add the annotation yourself. A model added without it,
+  inconsistent with the rest of the schema (see `PlatformConnection.connectedAt`/`updatedAt` for
+  the established pattern), is a real bug this repo shipped and then fixed with a follow-up
+  migration. Don't assume `DateTime` alone is timezone-aware — check every new model against this.
 
 ## Query Patterns
 
@@ -130,6 +145,16 @@ prisma migrate dev --name <description>   # development
 prisma migrate deploy                      # CI/CD — never migrate dev in prod
 prisma db seed                             # run seed script
 ```
+
+**Never hand-edit a `migration.sql` file that has already been applied to any real database**
+(even just a local dev DB) — Prisma tracks applied migrations by a checksum of the file content
+in `_prisma_migrations`; editing the file after the fact desyncs that table from what's actually
+on disk, and `prisma migrate status`/`deploy` will flag drift. If you need to fix or extend
+something an already-applied migration got wrong (a redundant index, a missing `Timestamptz`
+annotation, anything), update `schema.prisma` and run `prisma migrate dev` again to generate a
+**new** migration capturing the diff — never reach into the old file. See the `migration` agent's
+audit checklist for the full protocol, including checking whether the table already has rows
+before a type-widening change like `TIMESTAMP` → `TIMESTAMPTZ`.
 
 ## Rules
 - `db` is the only import — never `new PrismaClient()` outside `lib/db.ts`.

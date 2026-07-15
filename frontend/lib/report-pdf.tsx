@@ -5,12 +5,24 @@ export type ReportSourceRow = {
   amount: number;
 };
 
+// AI-generated (Gemini), income-descriptive-only summary — see lib/ai/income-narrative.ts.
+// Optional and additive: the caller (app/api/report/route.tsx) populates this only when
+// generation succeeds, so a failed/rate-limited/slow AI call still lets the rest of the report
+// render in full.
+export type ReportNarrative = {
+  text: string;
+  stabilityRating: string;
+  trendDirection: string;
+  diversificationSummary: string;
+};
+
 export type ReportData = {
   generatedAt: Date;
   userName: string;
   rangeLabel: string;
   totalVerified: number;
   bySource: ReportSourceRow[];
+  narrative?: ReportNarrative;
 };
 
 const CURRENCY = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
@@ -34,7 +46,28 @@ const styles = StyleSheet.create({
   certificate: { marginTop: 20, backgroundColor: "#e3f5ee", padding: 14, borderRadius: 6 },
   certificateTitle: { fontSize: 10, fontWeight: 700, color: "#0f6b4f" },
   certificateBody: { fontSize: 9, color: "#3a3a3a", marginTop: 4 },
+  narrativeText: { fontSize: 10, color: "#1a1a1a", marginTop: 8, lineHeight: 1.4 },
+  narrativeMeta: { fontSize: 9, fontWeight: 700, color: "#6b6b6b", marginTop: 8 },
+  narrativeDisclaimer: { fontSize: 8, color: "#8a8a8a", marginTop: 8 },
 });
+
+function capitalize(value: string): string {
+  return value.length > 0 ? value.charAt(0).toUpperCase() + value.slice(1) : value;
+}
+
+// Mirrors components/dashboard/ai-insights-card.tsx's TREND_LABEL so the same trendDirection
+// value reads identically on the dashboard and in the downloadable report — a naive capitalize()
+// would render "stable" as "Stable" here but "Steady" on the dashboard. stabilityRating has no
+// such special-casing on the dashboard, so it still just uses capitalize() below.
+const TREND_LABEL: Record<string, string> = {
+  increasing: "Increasing",
+  stable: "Steady",
+  decreasing: "Decreasing",
+};
+
+function trendLabel(value: string): string {
+  return TREND_LABEL[value] ?? capitalize(value);
+}
 
 /**
  * A parallel re-implementation of components/landing/report-mockup.tsx's visual content using
@@ -73,6 +106,21 @@ export function ReportDocument({ data }: { data: ReportData }) {
             </View>
           ))}
         </View>
+
+        {data.narrative ? (
+          <View style={styles.divider}>
+            <Text style={styles.sectionLabel}>AI INCOME SUMMARY</Text>
+            <Text style={styles.narrativeText}>{data.narrative.text}</Text>
+            <Text style={styles.narrativeMeta}>
+              Stability: {capitalize(data.narrative.stabilityRating)} · Trend: {trendLabel(data.narrative.trendDirection)}
+            </Text>
+            <Text style={styles.narrativeText}>{data.narrative.diversificationSummary}</Text>
+            <Text style={styles.narrativeDisclaimer}>
+              AI-generated description of the verified income shown above. Not a credit score,
+              creditworthiness assessment, or financial advice.
+            </Text>
+          </View>
+        ) : null}
 
         <View style={styles.certificate}>
           <Text style={styles.certificateTitle}>Verification certificate</Text>
