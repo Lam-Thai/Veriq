@@ -133,6 +133,15 @@ export async function generateIncomeNarrative(clerkId: string): Promise<IncomeNa
     return { status: "error" };
   }
 
+  // Bounds how long a single dashboard load / report download can be blocked waiting on Gemini —
+  // without this, a hung call has no client-side ceiling (the SDK's own abortSignal note applies:
+  // aborting stops us from waiting on the response, it doesn't cancel billing for a request
+  // already sent to Google). Cleared in `finally` below so a normal completion never leaves a
+  // dangling timer.
+  const GENERATION_TIMEOUT_MS = 20_000;
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), GENERATION_TIMEOUT_MS);
+
   try {
     const response = await ai.models.generateContent({
       model: AI_MODEL,
@@ -141,6 +150,7 @@ export async function generateIncomeNarrative(clerkId: string): Promise<IncomeNa
         systemInstruction: INCOME_NARRATIVE_SYSTEM_PROMPT,
         responseMimeType: "application/json",
         responseSchema: INCOME_NARRATIVE_RESPONSE_SCHEMA,
+        abortSignal: controller.signal,
       },
     });
 
@@ -218,5 +228,7 @@ export async function generateIncomeNarrative(clerkId: string): Promise<IncomeNa
     });
     if (process.env.NODE_ENV === "development") console.error(err);
     return { status: "error" };
+  } finally {
+    clearTimeout(timeoutId);
   }
 }

@@ -91,8 +91,6 @@ model IncomeNarrative {
   // lib/ai/income-narrative.ts's computeInputHash. Changes whenever a connection is added,
   // removed, or its verifiedAmount changes.
   inputHash   String
-  generatedAt DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  @@index([userId])
+  generatedAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @db.Timestamptz(3)
 }

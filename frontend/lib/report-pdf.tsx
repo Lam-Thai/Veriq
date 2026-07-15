@@ -55,6 +55,20 @@ function capitalize(value: string): string {
   return value.length > 0 ? value.charAt(0).toUpperCase() + value.slice(1) : value;
 }
 
+// Mirrors components/dashboard/ai-insights-card.tsx's TREND_LABEL so the same trendDirection
+// value reads identically on the dashboard and in the downloadable report — a naive capitalize()
+// would render "stable" as "Stable" here but "Steady" on the dashboard. stabilityRating has no
+// such special-casing on the dashboard, so it still just uses capitalize() below.
+const TREND_LABEL: Record<string, string> = {
+  increasing: "Increasing",
+  stable: "Steady",
+  decreasing: "Decreasing",
+};
+
+function trendLabel(value: string): string {
+  return TREND_LABEL[value] ?? capitalize(value);
+}
+
 /**
  * A parallel re-implementation of components/landing/report-mockup.tsx's visual content using
  * react-pdf's own layout primitives (View/Text/StyleSheet) rather than DOM/Tailwind — react-pdf
@@ -98,7 +112,7 @@ export function ReportDocument({ data }: { data: ReportData }) {
             <Text style={styles.sectionLabel}>AI INCOME SUMMARY</Text>
             <Text style={styles.narrativeText}>{data.narrative.text}</Text>
             <Text style={styles.narrativeMeta}>
-              Stability: {capitalize(data.narrative.stabilityRating)} · Trend: {capitalize(data.narrative.trendDirection)}
+              Stability: {capitalize(data.narrative.stabilityRating)} · Trend: {trendLabel(data.narrative.trendDirection)}
             </Text>
             <Text style={styles.narrativeText}>{data.narrative.diversificationSummary}</Text>
             <Text style={styles.narrativeDisclaimer}>

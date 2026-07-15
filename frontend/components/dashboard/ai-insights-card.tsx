@@ -50,10 +50,11 @@ export function AiInsightsCard({ hasConnections }: AiInsightsCardProps) {
     if (!hasConnections) return; // no connections yet — never attempt an AI call.
 
     let cancelled = false;
+    const controller = new AbortController();
 
     async function load() {
       try {
-        const res = await fetch("/api/ai/income-insights");
+        const res = await fetch("/api/ai/income-insights", { signal: controller.signal });
         if (!res.ok) {
           if (!cancelled) setState({ phase: "error" });
           return;
@@ -68,6 +69,8 @@ export function AiInsightsCard({ hasConnections }: AiInsightsCardProps) {
           setState({ phase: "ready", insights: body.data.insights });
         }
       } catch {
+        // Includes the AbortError fired by the cleanup below on unmount — `cancelled` is already
+        // true by then, so the guard skips setState rather than flashing an error post-unmount.
         if (!cancelled) setState({ phase: "error" });
       }
     }
@@ -75,6 +78,7 @@ export function AiInsightsCard({ hasConnections }: AiInsightsCardProps) {
     void load();
     return () => {
       cancelled = true;
+      controller.abort();
     };
   }, [hasConnections]);
 

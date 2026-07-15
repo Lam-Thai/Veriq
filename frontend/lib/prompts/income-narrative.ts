@@ -70,12 +70,19 @@ field populated from the data given. Do not respond with plain text or any wrapp
  * schema only shapes what the model attempts to produce; the zod schema is what every response
  * must pass before its data is trusted or persisted, exactly as the old Anthropic tool_use input
  * was validated.
+ *
+ * The `maxLength`/`maxItems` bounds below mirror `IncomeNarrativeOutputSchema`'s `.max(...)`
+ * calls exactly, so the model is steered toward output that actually passes zod instead of
+ * routinely generating something the zod gate then throws away. Note these are `string`-typed
+ * numeric literals (e.g. `"2000"`, not `2000`) — confirmed against the installed @google/genai
+ * package's `Schema` type declarations, which model them as strings.
  */
 export const INCOME_NARRATIVE_RESPONSE_SCHEMA: Schema = {
   type: Type.OBJECT,
   properties: {
     narrative: {
       type: Type.STRING,
+      maxLength: "2000",
       description:
         "A short (2-4 sentence) plain-English paragraph describing the income pattern shown in " +
         "the data. Descriptive only — no credit/lending/advice language.",
@@ -92,11 +99,13 @@ export const INCOME_NARRATIVE_RESPONSE_SCHEMA: Schema = {
     },
     diversificationSummary: {
       type: Type.STRING,
+      maxLength: "1000",
       description: "One or two sentences describing how spread out the income is across platforms.",
     },
     notableObservations: {
       type: Type.ARRAY,
-      items: { type: Type.STRING },
+      maxItems: "8",
+      items: { type: Type.STRING, maxLength: "300" },
       description:
         "Zero to four short, factual observations about the income pattern (e.g. a dominant " +
         "source, a seasonal dip). Purely descriptive — never advice or a risk judgment.",

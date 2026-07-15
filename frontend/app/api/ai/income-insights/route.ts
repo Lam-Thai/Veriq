@@ -36,15 +36,15 @@ export async function GET() {
     const clerkUser = await currentUser();
     if (!clerkUser) return ApiError.unauthorized();
 
-    const { success } = checkRateLimit(`income-insights:${clerkUser.id}`, RATE_LIMIT, RATE_LIMIT_WINDOW_MS);
-    if (!success) return ApiError.tooManyRequests();
+    const { success, resetAt } = checkRateLimit(`income-insights:${clerkUser.id}`, RATE_LIMIT, RATE_LIMIT_WINDOW_MS);
+    if (!success) return ApiError.tooManyRequests(Math.ceil((resetAt - Date.now()) / 1000));
 
-    const { success: globalSuccess } = checkRateLimit(
+    const { success: globalSuccess, resetAt: globalResetAt } = checkRateLimit(
       GLOBAL_RATE_LIMIT_KEY,
       GLOBAL_RATE_LIMIT,
       GLOBAL_RATE_LIMIT_WINDOW_MS,
     );
-    if (!globalSuccess) return ApiError.tooManyRequests();
+    if (!globalSuccess) return ApiError.tooManyRequests(Math.ceil((globalResetAt - Date.now()) / 1000));
 
     const result = await generateIncomeNarrative(clerkUser.id);
 
