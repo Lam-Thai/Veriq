@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { cn } from "@/lib/cn";
 import { CheckIcon, SpinnerIcon } from "@/components/ui/icons";
+import { PlatformAvatar } from "@/components/landing/platform-avatar";
 import {
   findPlatformBySlug,
   getAuthorizationUrl,
@@ -16,10 +17,6 @@ import {
   isConnectResultMessage,
   type ConnectResult,
 } from "@/lib/connect-flow";
-
-const PLATFORM_AVATAR_LETTER: Record<string, string> = Object.fromEntries(
-  PLATFORMS.map((platform) => [platform.name, platform.name.charAt(0)]),
-);
 
 const POPUP_POLL_INTERVAL_MS = 500;
 
@@ -253,12 +250,7 @@ function PlatformCard({ platform, status, onConnect }: PlatformCardProps) {
 
   return (
     <li className="flex items-center gap-4 rounded-lg border border-hairline bg-canvas p-4">
-      <span
-        aria-hidden="true"
-        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-pill bg-canvas-parchment text-(length:--type-tagline-size) font-semibold text-ink"
-      >
-        {PLATFORM_AVATAR_LETTER[platform.name]}
-      </span>
+      <PlatformAvatar platform={platform} />
 
       <div className="min-w-0 flex-1">
         <p className="text-(length:--type-body-size) font-semibold text-ink">{platform.name}</p>
