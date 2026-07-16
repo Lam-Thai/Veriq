@@ -150,6 +150,24 @@ export async function generateIncomeNarrative(clerkId: string): Promise<IncomeNa
         systemInstruction: INCOME_NARRATIVE_SYSTEM_PROMPT,
         responseMimeType: "application/json",
         responseSchema: INCOME_NARRATIVE_RESPONSE_SCHEMA,
+        // This task is single-shot JSON formatting of data we already computed, not multi-step
+        // reasoning, so thinking buys nothing here. Disabled because the `gemini-flash-latest`
+        // alias (see lib/ai.ts) now resolves to a "thinking" model that defaults to spending a
+        // large, variable token/time budget reasoning before it emits output — observed pushing
+        // even a trivial prompt past 15s and a real one past this call's 20s abort, i.e. it was
+        // the actual cause of the timeouts this feature was seeing, not a network/key issue.
+        thinkingConfig: { thinkingBudget: 0 },
+        // The SDK retries 503/429/5xx internally by default — up to 5 attempts with exponential
+        // backoff (node_modules/@google/genai's DEFAULT_RETRY_ATTEMPTS) — and that retry loop runs
+        // *inside* the single generateContent() call, so it can burn well past this function's own
+        // 20s abort before ever returning control to us: confirmed directly against the live API
+        // this session, where the SDK default hung 90+ seconds during a run of Gemini free-tier
+        // 503s instead of surfacing a fast, typed failure. Capped at 2 (one retry) as the balance
+        // that held up under repeated testing against real 503s: enough to ride out a single
+        // transient blip without the retry loop itself becoming the reason this call blows its
+        // time budget, and it burns fewer of the free tier's shared, unofficial per-project quota
+        // (see the global rate limiter in app/api/ai/income-insights/route.ts) than the default 5.
+        httpOptions: { retryOptions: { attempts: 2 } },
         abortSignal: controller.signal,
       },
     });
