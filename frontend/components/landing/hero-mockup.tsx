@@ -26,8 +26,9 @@ export function HeroMockup() {
       <div
         className={cn(
           "rounded-lg bg-white shadow-(--shadow-product)",
-          "[transform:rotateX(3deg)_rotateY(-4deg)] transition-transform duration-(--duration-slow) ease-(--ease-out)",
-          "hover:[transform:rotateX(0deg)_rotateY(0deg)] motion-reduce:transition-none",
+          "rotate-x-[3deg] rotate-y-[-4deg] transition-transform duration-(--duration-slow) ease-(--ease-out)",
+          "hover:rotate-x-0 hover:rotate-y-0",
+          "motion-reduce:transition-none motion-reduce:hover:rotate-x-[3deg] motion-reduce:hover:rotate-y-[-4deg]",
         )}
       >
         <BrowserChrome url="app.veriq.com / overview" />

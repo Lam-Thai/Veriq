@@ -28,7 +28,7 @@ export function ReportMockup() {
         className={cn(
           "rounded-lg bg-white p-6 shadow-(--shadow-product) sm:p-8",
           "[transform:rotateX(3deg)_rotateY(4deg)] transition-transform duration-(--duration-slow) ease-(--ease-out)",
-          "hover:[transform:rotateX(0deg)_rotateY(0deg)] motion-reduce:transition-none",
+          "hover:[transform:rotateX(0deg)_rotateY(0deg)] motion-reduce:transition-none motion-reduce:hover:[transform:rotateX(3deg)_rotateY(4deg)]",
         )}
       >
         <div className="flex items-start justify-between gap-4">

@@ -10,8 +10,13 @@ function readCssToken(token: string): string {
 
 export function getCssDurationMs(token: string, fallbackMs: number): number {
   const raw = readCssToken(token);
-  const parsed = parseFloat(raw);
-  return Number.isFinite(parsed) ? parsed : fallbackMs;
+  const match = raw.match(/^(-?[\d.]+)(ms|s)$/);
+  if (!match) return fallbackMs;
+
+  const value = parseFloat(match[1]!);
+  if (!Number.isFinite(value)) return fallbackMs;
+
+  return match[2] === "s" ? value * 1000 : value;
 }
 
 /**

@@ -26,7 +26,7 @@ export function DashboardOverviewMockup() {
         className={cn(
           "rounded-lg bg-white shadow-(--shadow-product)",
           "[transform:rotateX(2deg)] transition-transform duration-(--duration-slow) ease-(--ease-out)",
-          "hover:[transform:rotateX(0deg)] motion-reduce:transition-none",
+          "hover:[transform:rotateX(0deg)] motion-reduce:transition-none motion-reduce:hover:[transform:rotateX(2deg)]",
         )}
       >
         <BrowserChrome url="app.veriq.com/overview" />

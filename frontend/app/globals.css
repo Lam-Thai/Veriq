@@ -208,18 +208,16 @@ h3 {
   }
 }
 
-.bg-gradient-flow-dark,
-.bg-gradient-flow-light {
+@utility bg-gradient-flow-dark {
+  background-image: var(--gradient-flow-dark);
   background-size: 220% 220%;
   animation: gradient-flow var(--duration-ambient) var(--ease-in-out) infinite;
 }
 
-.bg-gradient-flow-dark {
-  background-image: var(--gradient-flow-dark);
-}
-
-.bg-gradient-flow-light {
+@utility bg-gradient-flow-light {
   background-image: var(--gradient-flow-light);
+  background-size: 220% 220%;
+  animation: gradient-flow var(--duration-ambient) var(--ease-in-out) infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {
