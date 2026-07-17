@@ -41,7 +41,7 @@ const USE_CASES: UseCase[] = [
 // Hierarchy: eyebrow → H2 → 5-card grid (icon, title, body). Last section on the page.
 export function UseCases() {
   return (
-    <section className="bg-canvas-parchment px-6 py-(--spacing-section)">
+    <section className="bg-gradient-flow-light px-6 py-(--spacing-section)">
       <Reveal className="mx-auto max-w-text text-center">
         <SectionEyebrow>Use cases</SectionEyebrow>
         <h2 className="mt-3 text-(length:--type-display-lg-size)/(--type-display-lg-lh) tracking-(--type-display-lg-ls) font-semibold text-ink">

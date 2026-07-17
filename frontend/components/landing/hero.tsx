@@ -9,7 +9,7 @@ const TRUSTED_SOURCES = ["Uber", "DoorDash", "Airbnb", "Upwork", "Stripe", "Five
 // Hierarchy: trust badge → H1 → subhead → CTAs → product mockup → trusted-by row
 export function Hero() {
   return (
-    <section id="why-veriq" className="bg-surface-tile-1 px-6 py-(--spacing-section)">
+    <section id="why-veriq" className="bg-gradient-flow-dark px-6 py-(--spacing-section)">
       <div className="mx-auto flex max-w-text flex-col items-center text-center">
         <span className="mb-6 inline-flex items-center gap-2 rounded-pill bg-(--color-chip-translucent-64) px-4 py-2 text-(length:--type-caption-size) text-ink">
           <DotIcon className="h-1.5 w-1.5 text-primary" />

@@ -5,7 +5,7 @@ import { PlatformGrid } from "@/components/landing/platform-grid";
 // Hierarchy: eyebrow → H2 → body → live status line → 11-card platform grid (client leaf)
 export function ConnectPlatforms() {
   return (
-    <section id="sources" className="bg-canvas-parchment px-6 py-(--spacing-section)">
+    <section id="sources" className="bg-gradient-flow-light px-6 py-(--spacing-section)">
       <Reveal className="mx-auto max-w-text text-center">
         <SectionEyebrow>Connect what pays you</SectionEyebrow>
         <h2 className="mt-3 text-(length:--type-display-lg-size)/(--type-display-lg-lh) tracking-(--type-display-lg-ls) font-semibold text-ink">

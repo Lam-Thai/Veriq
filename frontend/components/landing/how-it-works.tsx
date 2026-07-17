@@ -35,7 +35,7 @@ const STEPS: Step[] = [
 // Hierarchy: eyebrow → H2 → 3-card row (icon, STEP n label, title, body)
 export function HowItWorks() {
   return (
-    <section id="how-it-works" className="bg-surface-tile-1 px-6 py-(--spacing-section)">
+    <section id="how-it-works" className="bg-gradient-flow-dark px-6 py-(--spacing-section)">
       <Reveal className="mx-auto max-w-text text-center">
         <SectionEyebrow tone="dark">How it works</SectionEyebrow>
         <h2 className="mt-3 text-(length:--type-display-lg-size)/(--type-display-lg-lh) tracking-(--type-display-lg-ls) font-semibold text-white">

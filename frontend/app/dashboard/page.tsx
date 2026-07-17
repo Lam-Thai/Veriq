@@ -18,7 +18,7 @@ export default async function DashboardPage() {
   const connectedSlugs = connections.map((connection) => connection.slug);
 
   return (
-    <main className="min-h-screen bg-canvas-parchment px-6 py-16">
+    <main className="min-h-screen bg-gradient-flow-light px-6 py-16">
       <div className="mx-auto max-w-grid text-center">
         <h1 className="text-(length:--type-tagline-size)/(--type-tagline-lh) font-semibold text-ink">
           Welcome, {displayName}

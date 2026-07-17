@@ -36,7 +36,7 @@ const SECURITY_CARDS: SecurityCard[] = [
 // Hierarchy: eyebrow → H2 → body → 4-card grid (icon, title, body)
 export function SecuritySection() {
   return (
-    <section className="bg-canvas px-6 py-(--spacing-section)">
+    <section className="bg-gradient-flow-light px-6 py-(--spacing-section)">
       <Reveal className="mx-auto max-w-text text-center">
         <SectionEyebrow>Security &amp; trust</SectionEyebrow>
         <h2 className="mt-3 text-(length:--type-display-lg-size)/(--type-display-lg-lh) tracking-(--type-display-lg-ls) font-semibold text-ink">

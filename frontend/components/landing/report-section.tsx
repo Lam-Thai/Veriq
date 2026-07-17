@@ -16,7 +16,7 @@ const CHECKLIST_ITEMS: string[] = [
 // Hierarchy: eyebrow → H2 → body → checklist → CTA, beside the report mockup artifact
 export function ReportSection() {
   return (
-    <section id="the-report" className="bg-surface-tile-1 px-6 py-(--spacing-section)">
+    <section id="the-report" className="bg-gradient-flow-dark px-6 py-(--spacing-section)">
       <div className="mx-auto grid max-w-grid grid-cols-1 items-center gap-12 lg:grid-cols-2 lg:gap-16">
         <Reveal>
           <SectionEyebrow tone="dark">The report</SectionEyebrow>

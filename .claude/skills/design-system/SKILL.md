@@ -10,11 +10,16 @@ Design like a senior at a boutique studio — every decision traceable to the pr
 If the same UI could ship in any SaaS product unchanged, it's not distinctive enough.
 
 ### Explicitly Avoid
-- Generic purple-gradient dashboard hero sections
+- Gradients that aren't the one documented signature below (see "Signature Motifs") — no ad-hoc
+  gradients invented per-component, and never a hue that isn't derived from `--color-primary`
+- 3D motifs (cubes, isometric shapes, tilted geometry used as decoration) — tried and removed;
+  don't reintroduce without a fresh design-direction request
 - Box-shadow on every card (use spatial separation instead)
 - Icon spam (icons assist text, never replace it)
 - Inter + rounded-xl + teal accent (someone else's brand)
-- Glassmorphism and glow effects as decoration
+- Glassmorphism (translucent blurred panels) and glow-as-decoration (blurred halo/bloom around
+  an element for pure drama) — the gradient-flow backdrop is a different technique (solid color,
+  no blur) and is not an exception to this specific rule
 - Borders on every container
 
 ---
@@ -46,6 +51,8 @@ Weights: 400 body / 500 label+caption / 600 subheading / 700 display only.
 --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
 --ease-in-out: cubic-bezier(0.87, 0, 0.13, 1);
 --duration-fast: 120ms;  --duration-base: 200ms;  --duration-slow: 350ms;
+--duration-ambient: 20s; /* decorative-only loops (the gradient-flow backdrop) — never a
+                             UI state transition, which stays on fast/base/slow */
 ```
 
 ---
@@ -101,6 +108,30 @@ an afterthought tuned per component.
 - Every other container (cards, grids, panels) is flat: a hairline border, never a shadow.
   This is the concrete version of "no box-shadow on every card" — one deliberate exception,
   applied nowhere else.
+
+---
+
+## Signature Motifs (deliberate exception to the flat/no-gradient system)
+
+The system is flat and gradient-free everywhere *except* one documented, hand-built motif. It
+exists because a subjective design-direction review found the previous all-flat system generic —
+it's the system's one deliberate gradient identity, not a license to add gradients freely
+elsewhere. (A companion 3D geometric-cube motif was tried and explicitly removed — see
+"Explicitly Avoid" above.)
+
+**`--gradient-flow-dark` / `--gradient-flow-light`** (`app/globals.css`) — an animated diagonal
+gradient, derived entirely from existing color tokens via `color-mix()` (never a new arbitrary
+hue), that slowly pans via `background-position` on `--duration-ambient` / `--ease-in-out`.
+- `bg-gradient-flow-dark`: section background for the existing dark tile sections only (Hero,
+  ReportSection, HowItWorks) — replaces `bg-surface-tile-1`.
+- `bg-gradient-flow-light`: section background for light sections and the dashboard page canvas
+  — replaces `bg-canvas` / `bg-canvas-parchment`. Kept high-key (near-white stops) so body-text
+  contrast is never at risk; never applied behind dense data (cards/panels stay flat and opaque
+  on top of it).
+- Never applied to a `Card`, button, or any small interactive control — section/page backgrounds
+  only.
+- Freezes (no animation, static resting frame) under `prefers-reduced-motion: reduce` — see the
+  `@media (prefers-reduced-motion: reduce)` block in `globals.css`.
 
 ---
 
