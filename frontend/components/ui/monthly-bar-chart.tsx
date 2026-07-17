@@ -1,15 +1,9 @@
-// Jan–Jun, relative bar heights (percent of track) — June is the "current" highlighted month.
-// Shared by the hero and product-dashboard mockups so both tell the same income story.
-export const MONTHLY_BARS = [
-  { month: "Jan", heightPct: 58 },
-  { month: "Feb", heightPct: 64 },
-  { month: "Mar", heightPct: 70 },
-  { month: "Apr", heightPct: 66 },
-  { month: "May", heightPct: 78 },
-  { month: "Jun", heightPct: 100 },
-];
+"use client";
 
-type Bar = { month: string; heightPct: number };
+import { useEffect, useState } from "react";
+import { useReducedMotion } from "@/hooks/use-reduced-motion";
+import { cn } from "@/lib/cn";
+import { MONTHLY_BARS, type Bar } from "@/lib/monthly-bars";
 
 type MonthlyBarChartProps = {
   /** Height of the bar track, e.g. "h-32" or "h-36". Must be a definite-height utility — the
@@ -22,6 +16,18 @@ type MonthlyBarChartProps = {
 
 export function MonthlyBarChart({ trackHeightClassName, bars = MONTHLY_BARS }: MonthlyBarChartProps) {
   const currentMonth = bars.at(-1)?.month;
+  const prefersReducedMotion = useReducedMotion();
+  const [hasMounted, setHasMounted] = useState(false);
+
+  useEffect(() => {
+    if (prefersReducedMotion) return;
+    // Bars mount at 0% first, then grow to their real height a frame later — the CSS
+    // transition below only animates between two painted states, not an initial one.
+    const frame = requestAnimationFrame(() => setHasMounted(true));
+    return () => cancelAnimationFrame(frame);
+  }, [prefersReducedMotion]);
+
+  const hasGrown = prefersReducedMotion || hasMounted;
 
   return (
     <div>
@@ -29,8 +35,11 @@ export function MonthlyBarChart({ trackHeightClassName, bars = MONTHLY_BARS }: M
         {bars.map((bar) => (
           <div
             key={bar.month}
-            className={bar.month === currentMonth ? "flex-1 rounded-t-xs bg-primary" : "flex-1 rounded-t-xs bg-primary/25"}
-            style={{ height: `${bar.heightPct}%` }}
+            className={cn(
+              bar.month === currentMonth ? "flex-1 rounded-t-xs bg-primary" : "flex-1 rounded-t-xs bg-primary/25",
+              "transition-[height] duration-(--duration-slow) ease-(--ease-out) motion-reduce:transition-none",
+            )}
+            style={{ height: hasGrown ? `${bar.heightPct}%` : "0%" }}
           />
         ))}
       </div>

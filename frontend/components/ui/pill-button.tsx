@@ -14,7 +14,8 @@ type PillButtonOwnProps = {
 const sharedClasses = cn(
   "inline-flex items-center justify-center gap-2 rounded-pill font-semibold",
   "transition-[background-color,opacity,transform] duration-(--duration-base) ease-(--ease-out)",
-  "active:scale-(--press-scale)",
+  "hover:-translate-y-0.5 active:scale-(--press-scale) active:translate-y-0",
+  "motion-reduce:transition-none motion-reduce:hover:translate-y-0",
   "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-focus",
   "disabled:pointer-events-none disabled:opacity-50",
 );

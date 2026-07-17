@@ -1,5 +1,6 @@
 import { SectionEyebrow } from "@/components/ui/section-eyebrow";
 import { Card } from "@/components/ui/card";
+import { Reveal } from "@/components/ui/reveal";
 import { HomeIcon, BuildingIcon, CarIcon, WalletIcon, DocumentIcon } from "@/components/ui/icons";
 import type { ComponentType } from "react";
 
@@ -41,24 +42,26 @@ const USE_CASES: UseCase[] = [
 export function UseCases() {
   return (
     <section className="bg-canvas-parchment px-6 py-(--spacing-section)">
-      <div className="mx-auto max-w-text text-center">
+      <Reveal className="mx-auto max-w-text text-center">
         <SectionEyebrow>Use cases</SectionEyebrow>
         <h2 className="mt-3 text-(length:--type-display-lg-size)/(--type-display-lg-lh) tracking-(--type-display-lg-ls) font-semibold text-ink">
           Proof for whatever you&apos;re applying for
         </h2>
-      </div>
+      </Reveal>
 
       <div className="mx-auto mt-12 grid max-w-grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
         {USE_CASES.map(({ icon: Icon, title, body }) => (
-          <Card key={title} tone="light" className="bg-canvas">
-            <Icon className="h-6 w-6 text-primary" />
-            <h3 className="mt-4 text-(length:--type-tagline-size)/(--type-tagline-lh) font-semibold text-ink">
-              {title}
-            </h3>
-            <p className="mt-2 text-(length:--type-body-size)/(--type-body-lh) tracking-(--type-body-ls) text-ink-muted-80">
-              {body}
-            </p>
-          </Card>
+          <Reveal key={title}>
+            <Card tone="light" className="bg-canvas">
+              <Icon className="h-6 w-6 text-primary" />
+              <h3 className="mt-4 text-(length:--type-tagline-size)/(--type-tagline-lh) font-semibold text-ink">
+                {title}
+              </h3>
+              <p className="mt-2 text-(length:--type-body-size)/(--type-body-lh) tracking-(--type-body-ls) text-ink-muted-80">
+                {body}
+              </p>
+            </Card>
+          </Reveal>
         ))}
       </div>
     </section>

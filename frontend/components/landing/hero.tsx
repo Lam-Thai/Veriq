@@ -2,6 +2,7 @@ import Link from "next/link";
 import { PillButton } from "@/components/ui/pill-button";
 import { DotIcon, ArrowRightIcon } from "@/components/ui/icons";
 import { HeroMockup } from "@/components/landing/hero-mockup";
+import { Reveal } from "@/components/ui/reveal";
 
 const TRUSTED_SOURCES = ["Uber", "DoorDash", "Airbnb", "Upwork", "Stripe", "Fiverr"];
 
@@ -36,7 +37,9 @@ export function Hero() {
       </div>
 
       <div className="mx-auto mt-16 max-w-grid">
-        <HeroMockup />
+        <Reveal>
+          <HeroMockup />
+        </Reveal>
       </div>
 
       <div className="mx-auto mt-16 max-w-text text-center">

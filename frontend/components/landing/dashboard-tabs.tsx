@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { cn } from "@/lib/cn";
+import { Reveal } from "@/components/ui/reveal";
 import { DashboardOverviewMockup } from "@/components/landing/dashboard-overview-mockup";
 
 const TABS = ["Overview", "Monthly trends", "Platform breakdown", "Verification score", "Report"] as const;
@@ -45,7 +46,9 @@ export function DashboardTabs() {
 
       <div className="mt-10">
         {activeTab === "Overview" ? (
-          <DashboardOverviewMockup />
+          <Reveal>
+            <DashboardOverviewMockup />
+          </Reveal>
         ) : (
           <div
             role="tabpanel"
