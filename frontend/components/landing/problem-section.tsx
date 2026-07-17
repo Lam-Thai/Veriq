@@ -1,5 +1,6 @@
 import { SectionEyebrow } from "@/components/ui/section-eyebrow";
 import { Card } from "@/components/ui/card";
+import { Reveal } from "@/components/ui/reveal";
 import { DocumentIcon, ScatterIcon, ImageOffIcon, ClockIcon } from "@/components/ui/icons";
 import type { ComponentType } from "react";
 
@@ -35,8 +36,8 @@ const PROBLEM_CARDS: ProblemCard[] = [
 // Hierarchy: eyebrow → H2 → body → 4-card grid (icon, title, body)
 export function ProblemSection() {
   return (
-    <section className="bg-canvas px-6 py-(--spacing-section)">
-      <div className="mx-auto max-w-text text-center">
+    <section className="bg-gradient-flow-light px-6 py-(--spacing-section)">
+      <Reveal className="mx-auto max-w-text text-center">
         <SectionEyebrow>The problem</SectionEyebrow>
         <h2 className="mt-3 text-(length:--type-display-lg-size)/(--type-display-lg-lh) tracking-(--type-display-lg-ls) font-semibold text-ink">
           Traditional income verification was never built for you
@@ -46,19 +47,21 @@ export function ProblemSection() {
           spread across apps, platforms, and payout schedules. Proving it shouldn&apos;t mean a
           folder of screenshots.
         </p>
-      </div>
+      </Reveal>
 
       <div className="mx-auto mt-12 grid max-w-grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
         {PROBLEM_CARDS.map(({ icon: Icon, title, body }) => (
-          <Card key={title} tone="light">
-            <Icon className="h-6 w-6 text-primary" />
-            <h3 className="mt-4 text-(length:--type-tagline-size)/(--type-tagline-lh) font-semibold text-ink">
-              {title}
-            </h3>
-            <p className="mt-2 text-(length:--type-body-size)/(--type-body-lh) tracking-(--type-body-ls) text-ink-muted-80">
-              {body}
-            </p>
-          </Card>
+          <Reveal key={title}>
+            <Card tone="light">
+              <Icon className="h-6 w-6 text-primary" />
+              <h3 className="mt-4 text-(length:--type-tagline-size)/(--type-tagline-lh) font-semibold text-ink">
+                {title}
+              </h3>
+              <p className="mt-2 text-(length:--type-body-size)/(--type-body-lh) tracking-(--type-body-ls) text-ink-muted-80">
+                {body}
+              </p>
+            </Card>
+          </Reveal>
         ))}
       </div>
     </section>

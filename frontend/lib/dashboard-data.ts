@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { MONTHLY_BARS } from "@/components/ui/monthly-bar-chart";
+import { MONTHLY_BARS } from "@/lib/monthly-bars";
 
 export type UserConnection = {
   slug: string;

@@ -94,11 +94,32 @@
   --duration-fast: 120ms;
   --duration-base: 200ms;
   --duration-slow: 350ms;
+  /* Ambient/decorative motion only (the gradient-flow background drift) — never used for UI
+     state transitions, which stay on the fast/base/slow scale above. */
+  --duration-ambient: 20s;
   --press-scale: 0.95; /* the one micro-interaction: buttons scale(0.95) on press/active */
 
   /* Elevation — exactly ONE shadow in the whole system */
   --shadow-product: 3px 5px 30px 0 rgba(0, 0, 0, 0.22);
   --border-hairline: 1px solid var(--color-hairline-alpha);
+
+  /* Signature gradient-flow backdrop — the system's one deliberate gradient, built from the
+     existing color tokens (never a new arbitrary hue) rather than a generic purple blob.
+     Dark variant: near-black tile → brand blue. Light variant: canvas → parchment → a whisper
+     of primary tint, kept high-key so body text contrast is never at risk. */
+  --gradient-flow-dark: linear-gradient(
+    135deg,
+    var(--color-surface-tile-1) 0%,
+    color-mix(in srgb, var(--color-primary) 35%, var(--color-surface-tile-1)) 50%,
+    var(--color-primary) 100%
+  );
+  --gradient-flow-light: linear-gradient(
+    120deg,
+    var(--color-canvas) 0%,
+    var(--color-canvas-parchment) 45%,
+    color-mix(in srgb, var(--color-primary) 6%, var(--color-canvas)) 75%,
+    var(--color-canvas) 100%
+  );
 }
 
 @theme inline {
@@ -172,4 +193,37 @@ h3 {
 :focus-visible {
   outline: 2px solid var(--color-primary-focus);
   outline-offset: 2px;
+}
+
+/* Signature gradient-flow backdrop — the system's one deliberate gradient exception (see
+   .claude/skills/design-system/SKILL.md). Ambient/decorative only: never behind data-dense
+   card content, never blocking a focus ring. */
+@keyframes gradient-flow {
+  0%,
+  100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+@utility bg-gradient-flow-dark {
+  background-image: var(--gradient-flow-dark);
+  background-size: 220% 220%;
+  animation: gradient-flow var(--duration-ambient) var(--ease-in-out) infinite;
+}
+
+@utility bg-gradient-flow-light {
+  background-image: var(--gradient-flow-light);
+  background-size: 220% 220%;
+  animation: gradient-flow var(--duration-ambient) var(--ease-in-out) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bg-gradient-flow-dark,
+  .bg-gradient-flow-light {
+    animation: none;
+    background-position: 50% 50%;
+  }
 }

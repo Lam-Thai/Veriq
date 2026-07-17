@@ -1,10 +1,9 @@
 import { Card } from "@/components/ui/card";
+import { AnimatedNumber } from "@/components/ui/animated-number";
 import { MonthlyBarChart } from "@/components/ui/monthly-bar-chart";
 import { ConnectionsPanel } from "@/components/dashboard/connections-panel";
 import { AiInsightsCard } from "@/components/dashboard/ai-insights-card";
 import { toBarHeights, type DashboardStats } from "@/lib/dashboard-data";
-
-const CURRENCY = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
 
 type OverviewPanelProps = {
   stats: DashboardStats;
@@ -19,14 +18,18 @@ export function OverviewPanel({ stats, connectedSlugs }: OverviewPanelProps) {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Card>
           <p className="text-(length:--type-fine-print-size) text-ink-muted-48">Verified · 6 mo</p>
-          <p className="mt-1 text-2xl font-semibold text-ink">{CURRENCY.format(stats.totalVerified)}</p>
+          <p className="mt-1 text-2xl font-semibold text-ink">
+            <AnimatedNumber value={stats.totalVerified} />
+          </p>
           <p className="mt-1 text-(length:--type-fine-print-size) text-verified">
             {connectedSlugs.length} {connectedSlugs.length === 1 ? "source" : "sources"}
           </p>
         </Card>
         <Card>
           <p className="text-(length:--type-fine-print-size) text-ink-muted-48">This month</p>
-          <p className="mt-1 text-2xl font-semibold text-ink">{CURRENCY.format(stats.thisMonth)}</p>
+          <p className="mt-1 text-2xl font-semibold text-ink">
+            <AnimatedNumber value={stats.thisMonth} />
+          </p>
         </Card>
       </div>
 

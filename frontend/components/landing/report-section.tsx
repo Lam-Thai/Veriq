@@ -3,6 +3,7 @@ import { SectionEyebrow } from "@/components/ui/section-eyebrow";
 import { PillButton } from "@/components/ui/pill-button";
 import { CheckIcon } from "@/components/ui/icons";
 import { ReportMockup } from "@/components/landing/report-mockup";
+import { Reveal } from "@/components/ui/reveal";
 
 const CHECKLIST_ITEMS: string[] = [
   "Total verified income across every source",
@@ -15,9 +16,9 @@ const CHECKLIST_ITEMS: string[] = [
 // Hierarchy: eyebrow → H2 → body → checklist → CTA, beside the report mockup artifact
 export function ReportSection() {
   return (
-    <section id="the-report" className="bg-surface-tile-1 px-6 py-(--spacing-section)">
+    <section id="the-report" className="bg-gradient-flow-dark px-6 py-(--spacing-section)">
       <div className="mx-auto grid max-w-grid grid-cols-1 items-center gap-12 lg:grid-cols-2 lg:gap-16">
-        <div>
+        <Reveal>
           <SectionEyebrow tone="dark">The report</SectionEyebrow>
           <h2 className="mt-3 text-(length:--type-display-lg-size)/(--type-display-lg-lh) tracking-(--type-display-lg-ls) font-semibold text-white">
             One document. Every dollar, verified.
@@ -43,11 +44,11 @@ export function ReportSection() {
               View full report
             </PillButton>
           </div>
-        </div>
+        </Reveal>
 
-        <div className="flex justify-center">
+        <Reveal className="flex justify-center">
           <ReportMockup />
-        </div>
+        </Reveal>
       </div>
     </section>
   );

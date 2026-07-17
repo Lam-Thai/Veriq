@@ -4,7 +4,7 @@ import { renderToBuffer } from "@react-pdf/renderer";
 import { ApiError } from "@/lib/api-error";
 import { getUserConnections, type UserConnection } from "@/lib/dashboard-data";
 import { findPlatformBySlug } from "@/components/landing/platform-data";
-import { MONTHLY_BARS } from "@/components/ui/monthly-bar-chart";
+import { MONTHLY_BARS } from "@/lib/monthly-bars";
 import { ReportDocument, type ReportData, type ReportNarrative } from "@/lib/report-pdf";
 import { generateIncomeNarrative } from "@/lib/ai/income-narrative";
 import type { User } from "@clerk/nextjs/server";
