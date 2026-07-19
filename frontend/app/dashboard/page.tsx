@@ -27,7 +27,7 @@ export default async function DashboardPage() {
 
       <div className="mt-10">
         <DashboardShell
-          overview={<OverviewPanel stats={stats} connectedSlugs={connectedSlugs} />}
+          overview={<OverviewPanel stats={stats} connections={connections} connectedSlugs={connectedSlugs} />}
           report={<ReportPanel hasConnections={connections.length > 0} />}
           account={
             <div className="flex justify-center">

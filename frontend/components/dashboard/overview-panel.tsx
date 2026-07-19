@@ -3,14 +3,16 @@ import { AnimatedNumber } from "@/components/ui/animated-number";
 import { MonthlyBarChart } from "@/components/ui/monthly-bar-chart";
 import { ConnectionsPanel } from "@/components/dashboard/connections-panel";
 import { AiInsightsCard } from "@/components/dashboard/ai-insights-card";
-import { toBarHeights, type DashboardStats } from "@/lib/dashboard-data";
+import { AdvisorInsightsCard } from "@/components/dashboard/advisor-insights-card";
+import { toBarHeights, type DashboardStats, type UserConnection } from "@/lib/dashboard-data";
 
 type OverviewPanelProps = {
   stats: DashboardStats;
+  connections: UserConnection[];
   connectedSlugs: string[];
 };
 
-export function OverviewPanel({ stats, connectedSlugs }: OverviewPanelProps) {
+export function OverviewPanel({ stats, connections, connectedSlugs }: OverviewPanelProps) {
   const bars = toBarHeights(stats.monthlyBreakdown);
 
   return (
@@ -43,6 +45,10 @@ export function OverviewPanel({ stats, connectedSlugs }: OverviewPanelProps) {
 
       <div className="mt-8">
         <AiInsightsCard hasConnections={connectedSlugs.length > 0} />
+      </div>
+
+      <div className="mt-4">
+        <AdvisorInsightsCard connections={connections} stats={stats} />
       </div>
 
       <div className="mt-10">
