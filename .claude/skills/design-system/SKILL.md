@@ -137,12 +137,26 @@ hue), that slowly pans via `background-position` on `--duration-ambient` / `--ea
 
 ## Component Rules
 - All 5 interactive states: `default → hover → focus → active → disabled`.
-- All 4 state variants: `empty → loading → error → populated`.
+- All 4 state variants: `empty → loading → error → populated` — except a component that renders
+  synchronously from data its parent already fetched (no fetch/async of its own) legitimately
+  only needs `empty → populated`; see `ui-component`'s state-variants section for the exact test.
 - Empty state = invitation to act, not a blank screen.
 - Loading = skeleton (preserves layout) over spinner (blocks space).
 - Focus: `focus-visible:ring-2 focus-visible:ring-ring` — never `outline-none` alone.
 - Hierarchy through scale and weight, not decoration.
 - No `margin-top` on first child / `margin-bottom` on last child — parent handles padding.
+- A value that reads as legitimately non-empty (e.g. `total > 0`) must still *render* as
+  non-empty — check the formatted output, not just the raw number. A currency formatter that
+  rounds to whole dollars turns $0.30 into the on-screen string "$0", which looks identical to
+  the empty state even though the empty-state guard was satisfied. Prefer formatting that can't
+  collapse a real value to zero, or tighten the guard to match what's actually displayed.
+- When two components present alternate views of the *same* underlying data (e.g. an
+  AI-generated summary next to a deterministic, rule-based one — see
+  `components/dashboard/ai-insights-card.tsx` and `advisor-insights-card.tsx`), make the
+  distinction legible without relying on color alone: a different heading, a small supporting
+  icon, and copy that doesn't imply the other one's authorship (a rule-based card should never
+  read as AI-written, and vice versa). Place the deterministic/always-available one so it still
+  makes sense on its own if the other is degraded, erroring, or absent.
 
 ---
 
