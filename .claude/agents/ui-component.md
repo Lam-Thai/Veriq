@@ -61,6 +61,17 @@ toggle inside a server-rendered nav), say so in a one-line comment on the compon
 state what it owns and why it's isolated. The next reader shouldn't have to guess why one
 file in a folder of server components has `"use client"`.
 
+**Pairing an async view with a synchronous fallback.** When a client component depends on an
+external service that can degrade (rate limits, a third-party outage, a flaky API), consider
+placing a plain Server Component next to it that renders a fallback view from data the page
+already has — no fetch, no client JS. This isn't the client/server split above (both can
+coexist on the page at once); it's a resilience pattern: the fallback stays useful precisely
+when the async sibling is loading, erroring, or unavailable. Real example:
+`components/dashboard/ai-insights-card.tsx` (client, fetches an AI-generated summary) next to
+`components/dashboard/advisor-insights-card.tsx` (server, computes the same shape of summary
+with plain rules from props the page already loaded). Give the fallback its own distinct
+heading/copy — see `design-system`'s note on distinguishing alternate views of the same data.
+
 ---
 
 ## File Structure
@@ -138,6 +149,13 @@ function InvoiceCardSkeleton() {
 
 // 4. Populated — the actual component
 ```
+
+**Exception:** loading and error are states of a *fetch*, not of a component. A component that
+has no fetch of its own — it derives everything it renders from props a Server Component parent
+already loaded, synchronously — genuinely only has two states, empty and populated. Adding a
+loading skeleton or error boundary to it would be dead code: nothing async ever puts it in those
+states. Don't build the state you can't reach; do keep the check honest (if the component gains
+its own `useEffect`/fetch/mutation later, it now needs all four again).
 
 ---
 
@@ -223,7 +241,8 @@ export function InvoiceForm() {
 ## Audit Checklist
 - [ ] RSC by default, `"use client"` only where required
 - [ ] Explicit prop interface defined
-- [ ] All 4 state variants handled (empty, loading, error, populated)
+- [ ] All 4 state variants handled (empty, loading, error, populated) — or just empty/populated
+      if the component genuinely has no fetch of its own
 - [ ] All 5 interactive states styled (default, hover, focus, active, disabled)
 - [ ] Semantic HTML (no div soup)
 - [ ] Focus ring on all interactive elements

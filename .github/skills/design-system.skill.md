@@ -56,7 +56,9 @@ Weights: 400 body / 500 label+caption / 600 subheading / 700 display only.
 
 ## Component Rules
 - All 5 interactive states: `default → hover → focus → active → disabled`.
-- All 4 state variants: `empty → loading → error → populated`.
+- All 4 state variants: `empty → loading → error → populated` — except a component that renders
+  synchronously from data its parent already fetched (no fetch/async of its own) legitimately
+  only needs `empty → populated`; see `ui-component`'s state-variants section for the exact test.
 - Empty state = invitation to act, not a blank screen.
 - Loading = skeleton (preserves layout) over spinner (blocks space).
 - Focus: `focus-visible:ring-2 focus-visible:ring-ring` — never `outline-none` alone.
