@@ -6,6 +6,8 @@ class Settings(BaseSettings):
 
     ENVIRONMENT: str = "development"
     ALLOWED_ORIGINS: list[str] = ["http://localhost:3000"]
+    INTERNAL_JWT_SECRET: str
+    SENTRY_DSN: str | None = None
 
 
 settings = Settings()

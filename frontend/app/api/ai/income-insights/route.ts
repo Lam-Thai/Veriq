@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
+import { headers } from "next/headers";
 import { currentUser } from "@clerk/nextjs/server";
 import { ApiError } from "@/lib/api-error";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { loggerFor } from "@/lib/logger";
 import { generateIncomeNarrative } from "@/lib/ai/income-narrative";
 import type { IncomeInsightsData } from "@/lib/prompts/income-narrative";
 
@@ -32,6 +34,9 @@ const GLOBAL_RATE_LIMIT_WINDOW_MS = 60_000;
  * widen this to another user's data (see .claude/skills/security/SKILL.md's IDOR guidance).
  */
 export async function GET() {
+  const requestId = (await headers()).get("x-request-id") ?? "unknown";
+  const log = loggerFor(requestId);
+
   try {
     const clerkUser = await currentUser();
     if (!clerkUser) return ApiError.unauthorized();
@@ -55,7 +60,7 @@ export async function GET() {
 
     return NextResponse.json({ data });
   } catch (err) {
-    console.error("[ai-income-insights] unhandled error", err);
+    log.error({ err }, "[ai-income-insights] unhandled error");
     return ApiError.internal();
   }
 }

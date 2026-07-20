@@ -86,6 +86,29 @@ Full mapping of which agents rely on which skills lives in [.claude/README.md](.
 
 ---
 
+## Where new work goes: Next.js vs. FastAPI
+
+**Default to Next.js API routes** for anything session-gated, CRUD-shaped, or tightly coupled to
+the frontend — that's nearly everything today (Stripe checkout, the connect flow, dashboard
+data). This also covers heavy work that depends on a **Node-only library with no Python
+equivalent** (e.g. `@react-pdf/renderer`, which has no FastAPI port without rewriting the report
+template) — but once that work is genuinely CPU/latency-heavy, it must run through an async job
+pattern (see `app/api/report/route.tsx` / `app/api/report/[jobId]/route.ts`: create a job row,
+do the work in `after()` so it never blocks the request/response, poll for the result) — never
+synchronously inside the request handler.
+
+**Default to FastAPI** for CPU/latency-heavy work that's Python-native or file/data-processing
+heavy: file parsing (PDF/CSV/image), embeddings/vector search, RAG pipelines, document ingestion,
+batch inference, heavy aggregation — see `.claude/agents/fastapi-route.md`'s routing table, which
+this defers to. Calls from Next.js authenticate with a short-lived service-token JWT
+(`lib/service-token.ts` → FastAPI's `verify_service_token`/`get_current_user_id` in
+`backend/app/auth.py`), never talking to Clerk directly.
+
+As of this writing, no feature actually needs FastAPI for real production traffic yet — the
+service-token auth, rate limiting, structured logging, and Sentry wiring exist so the next
+genuinely heavy, Python-appropriate feature has a validated home instead of reflexively landing
+in another Next.js API route.
+
 ## Repo layout
 
 ```

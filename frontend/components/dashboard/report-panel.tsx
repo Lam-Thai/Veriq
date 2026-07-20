@@ -1,19 +1,26 @@
+"use client";
+
 import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { PillButton } from "@/components/ui/pill-button";
 import { CheckBadgeIcon } from "@/components/ui/icons";
+import { useReportDownload } from "@/hooks/use-report-download";
 
 type ReportPanelProps = {
   hasConnections: boolean;
 };
 
 /**
- * "Download report" stays a quick-download affordance (plain navigation to a route that
- * responds with Content-Disposition: attachment, app/api/report/route.tsx — no client JS
- * needed for that click) with every connected platform included. The second link sends users
- * to /dashboard/report to pick a subset of platforms before generating.
+ * "Download report" starts an async report job and downloads it once ready (see
+ * hooks/use-report-download.ts — app/api/report/route.tsx no longer renders synchronously, so
+ * this can no longer be a plain `<a href>` navigation like it used to be) with every connected
+ * platform included. The second link sends users to /dashboard/report to pick a subset of
+ * platforms before generating.
  */
 export function ReportPanel({ hasConnections }: ReportPanelProps) {
+  const { status, errorMessage, download } = useReportDownload();
+  const isGenerating = status === "generating";
+
   return (
     <Card className="mx-auto max-w-md text-center">
       <CheckBadgeIcon className="mx-auto h-8 w-8 text-primary" />
@@ -28,12 +35,17 @@ export function ReportPanel({ hasConnections }: ReportPanelProps) {
 
       <div className="mt-6 flex flex-col items-center gap-3">
         {hasConnections ? (
-          <PillButton as="a" href="/api/report">
-            Download report
+          <PillButton type="button" onClick={() => void download()} disabled={isGenerating}>
+            {isGenerating ? "Generating…" : "Download report"}
           </PillButton>
         ) : (
           <PillButton disabled>Download report</PillButton>
         )}
+        {status === "error" && errorMessage ? (
+          <p role="alert" className="text-(length:--type-fine-print-size) text-danger">
+            {errorMessage}
+          </p>
+        ) : null}
         <PillButton as={Link} href="/dashboard/report" variant="secondary-light" size="compact">
           {hasConnections ? "Customize & view full report" : "View report page"}
         </PillButton>

@@ -1,8 +1,10 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { headers } from "next/headers";
 import { currentUser } from "@clerk/nextjs/server";
 import { z } from "zod";
 import { ApiError } from "@/lib/api-error";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { loggerFor } from "@/lib/logger";
 import { db } from "@/lib/db";
 import { stripe } from "@/lib/stripe";
 import { PAID_PLAN_IDS, STRIPE_PRICE_BY_PLAN } from "@/lib/stripe-price-map";
@@ -37,6 +39,9 @@ const RATE_LIMIT_WINDOW_MS = 60_000;
  * never ends up with more than one Stripe Customer.
  */
 export async function POST(request: NextRequest) {
+  const requestId = (await headers()).get("x-request-id") ?? "unknown";
+  const log = loggerFor(requestId);
+
   try {
     const clerkUser = await currentUser();
     if (!clerkUser) return ApiError.unauthorized();
@@ -51,7 +56,7 @@ export async function POST(request: NextRequest) {
 
     const email = clerkUser.primaryEmailAddress?.emailAddress;
     if (!email) {
-      console.error("[checkout] clerk user has no primary email", { clerkId: clerkUser.id });
+      log.error({ clerkId: clerkUser.id }, "[checkout] clerk user has no primary email");
       return ApiError.internal();
     }
 
@@ -110,13 +115,13 @@ export async function POST(request: NextRequest) {
     });
 
     if (!session.url) {
-      console.error("[checkout] stripe returned a checkout session with no url", { sessionId: session.id });
+      log.error({ sessionId: session.id }, "[checkout] stripe returned a checkout session with no url");
       return ApiError.internal();
     }
 
     return NextResponse.json({ data: { url: session.url } });
   } catch (err) {
-    console.error("[checkout] unhandled error", err);
+    log.error({ err }, "[checkout] unhandled error");
     return ApiError.internal();
   }
 }

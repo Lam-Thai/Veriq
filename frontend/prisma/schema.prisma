@@ -24,6 +24,7 @@ model User {
   subscription        Subscription?
   platformConnections PlatformConnection[]
   incomeNarrative     IncomeNarrative?
+  reportJobs          ReportJob[]
 
   @@index([clerkId])
 }
@@ -93,4 +94,38 @@ model IncomeNarrative {
   inputHash   String
   generatedAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt   DateTime @updatedAt @db.Timestamptz(3)
+}
+
+enum ReportJobStatus {
+  PENDING
+  PROCESSING
+  READY
+  FAILED
+}
+
+// Tracks an async PDF-report render so app/api/report/route.tsx never blocks a request/
+// serverless invocation on `renderToBuffer` (see README's "Where new work goes" section) — the
+// POST route creates this row and schedules the render via Next.js's `after()`, and
+// app/api/report/[jobId]/route.ts polls it. `pdfData` is stored inline (Postgres bytea) rather
+// than in object storage: report sizes here are small (a text/table PDF, no images) and this
+// avoids adding a new storage dependency for a foundational-scale fix — revisit if report
+// size/volume ever makes that impractical. `expiresAt` rows are opportunistically deleted by the
+// next job creation for the same user (see lib/report-jobs.ts) rather than a cron job, the same
+// "cheap inline cleanup, no scheduler" precedent lib/rate-limit.ts already uses.
+model ReportJob {
+  id             String          @id @default(cuid())
+  userId         String
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status         ReportJobStatus @default(PENDING)
+  // Raw `platforms` query param from the request that created this job, re-applied by the after()
+  // callback so the rendered subset always matches what the caller asked for.
+  platformsParam String?
+  pdfData        Bytes?
+  filename       String?
+  error          String?
+  createdAt      DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime        @updatedAt @db.Timestamptz(3)
+  expiresAt      DateTime        @db.Timestamptz(3)
+
+  @@index([userId])
 }

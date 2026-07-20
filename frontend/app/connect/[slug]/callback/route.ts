@@ -1,11 +1,17 @@
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { createHash, timingSafeEqual } from "node:crypto";
 import { currentUser } from "@clerk/nextjs/server";
 import { findPlatformBySlug } from "@/components/landing/platform-data";
 import { isCallbackRequestBody, stateCookieName, type ConnectResult } from "@/lib/connect-flow";
 import { ApiError } from "@/lib/api-error";
+import { checkRateLimit } from "@/lib/rate-limit";
+import { loggerFor } from "@/lib/logger";
 import { db } from "@/lib/db";
+
+// Same window/limit as the authorize route this pairs with — see that file's comment.
+const RATE_LIMIT = 20;
+const RATE_LIMIT_WINDOW_MS = 60_000;
 
 /**
  * Hash both sides to a fixed-length digest before comparing so a length mismatch (e.g. a
@@ -23,6 +29,9 @@ function timingSafeEqualStrings(a: string, b: string): boolean {
  * a caller can't forge an "approved" result for an attempt it didn't legitimately start.
  */
 export async function POST(request: Request, ctx: RouteContext<"/connect/[slug]/callback">) {
+  const requestId = (await headers()).get("x-request-id") ?? "unknown";
+  const log = loggerFor(requestId);
+
   const { slug } = await ctx.params;
   const platform = findPlatformBySlug(slug);
   if (!platform) {
@@ -51,12 +60,15 @@ export async function POST(request: Request, ctx: RouteContext<"/connect/[slug]/
   const clerkUser = await currentUser();
   if (!clerkUser) return ApiError.unauthorized();
 
+  const { success, resetAt } = checkRateLimit(`connect-callback:${clerkUser.id}`, RATE_LIMIT, RATE_LIMIT_WINDOW_MS);
+  if (!success) return ApiError.tooManyRequests(Math.ceil((resetAt - Date.now()) / 1000));
+
   const result: ConnectResult = body.decision === "approve" ? "approved" : "denied";
 
   if (result === "approved") {
     const email = clerkUser.primaryEmailAddress?.emailAddress;
     if (!email) {
-      console.error("[connect callback] clerk user has no primary email", { clerkId: clerkUser.id });
+      log.error({ clerkId: clerkUser.id }, "[connect callback] clerk user has no primary email");
       return ApiError.internal();
     }
 
@@ -76,7 +88,7 @@ export async function POST(request: Request, ctx: RouteContext<"/connect/[slug]/
         update: { verifiedAmount: platform.verifiedAmount },
       });
     } catch (err) {
-      console.error("[connect callback] failed to persist connection", { clerkId: clerkUser.id, slug }, err);
+      log.error({ err, clerkId: clerkUser.id, slug }, "[connect callback] failed to persist connection");
       return ApiError.internal();
     }
   }

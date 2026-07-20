@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { PillButton } from "@/components/ui/pill-button";
 import { cn } from "@/lib/cn";
+import { useReportDownload } from "@/hooks/use-report-download";
 
 const CURRENCY = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
 
@@ -20,12 +21,15 @@ type ReportBuilderProps = {
 
 /**
  * Lets a signed-in user choose which connected platforms to include, then downloads the PDF
- * with that selection applied. The selection is carried as a `platforms` query param on the
- * plain `<a href>` to /api/report — no client fetch/blob handling needed, same
- * navigate-to-a-file-response approach report-panel.tsx already uses.
+ * with that selection applied. The selection is carried as a `platforms` param to
+ * useReportDownload (see hooks/use-report-download.ts), which POSTs /api/report, polls the
+ * resulting job, and triggers the blob download once it's ready — report-panel.tsx uses the same
+ * hook for its all-platforms download.
  */
 export function ReportBuilder({ sources }: ReportBuilderProps) {
   const [selected, setSelected] = useState<Set<string>>(() => new Set(sources.map((source) => source.slug)));
+  const { status, errorMessage, download } = useReportDownload();
+  const isGenerating = status === "generating";
 
   if (sources.length === 0) {
     return (
@@ -61,7 +65,7 @@ export function ReportBuilder({ sources }: ReportBuilderProps) {
     .filter((source) => selected.has(source.slug))
     .reduce((sum, source) => sum + source.amount, 0);
 
-  const downloadHref = `/api/report?${new URLSearchParams({ platforms: Array.from(selected).join(",") }).toString()}`;
+  const platformsParam = Array.from(selected).join(",");
 
   return (
     <div className="mx-auto max-w-2xl">
@@ -108,14 +112,19 @@ export function ReportBuilder({ sources }: ReportBuilderProps) {
         </ul>
       </div>
 
-      <div className="mt-8 flex justify-center">
+      <div className="mt-8 flex flex-col items-center gap-3">
         {selected.size > 0 ? (
-          <PillButton as="a" href={downloadHref}>
-            Download report PDF
+          <PillButton type="button" onClick={() => void download(platformsParam)} disabled={isGenerating}>
+            {isGenerating ? "Generating…" : "Download report PDF"}
           </PillButton>
         ) : (
           <PillButton disabled>Select at least one platform</PillButton>
         )}
+        {status === "error" && errorMessage ? (
+          <p role="alert" className="text-(length:--type-fine-print-size) text-danger">
+            {errorMessage}
+          </p>
+        ) : null}
       </div>
     </div>
   );

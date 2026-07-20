@@ -151,12 +151,14 @@ response from touching state, the abort actually stops the in-flight request. Us
 
 ## Structured Logging
 
-> **Repo reality check**: `pino` is not installed and `lib/logger.ts` does not exist in this repo
-> as of this writing (same for `structlog` on any FastAPI service that hasn't set it up). Until
-> that infra exists, `console.error("[context] message", err)` in TypeScript is the accepted
-> interim pattern — see `lib/api-error.ts` and `app/api/checkout/route.ts` for the real precedent.
-> Don't import a `lib/logger.ts` that isn't there. The structured pattern below is the target
-> shape for once logging infra is actually added; treat it as forward design, not present fact.
+> **Repo reality check**: `pino` (Next.js) and `structlog` (FastAPI) are both real, installed, and
+> wired up — `lib/logger.ts` (Next.js) and `app/core/logging.py` (FastAPI) exist and this is the
+> pattern to import, not aspirational. Both sides also bind a request/correlation id
+> (`x-request-id`, stamped in `proxy.ts` and forwarded on every Next.js → FastAPI service call) so
+> one request's logs can be traced across both services. `console.error("[context] message", err)`
+> is still what you'll find in routes this hasn't reached yet — replace it with `logger.error(...)`
+> as you touch those routes, following the pattern in `app/api/report/route.tsx` /
+> `app/api/checkout/route.ts` rather than leaving new ad hoc `console.*` calls.
 
 ### TypeScript (pino)
 ```ts
