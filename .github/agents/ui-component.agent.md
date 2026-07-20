@@ -204,7 +204,8 @@ export function InvoiceForm() {
 - [ ] RSC by default, `"use client"` only where required
 - [ ] Explicit prop interface defined
 - [ ] All 4 state variants handled (empty, loading, error, populated) — or just empty/populated
-      if the component genuinely has no fetch of its own
+      only if the component has no fetch of its own AND its parent provides the data
+      synchronously (not a promise prop); otherwise all four are required
 - [ ] All 5 interactive states styled (default, hover, focus, active, disabled)
 - [ ] Semantic HTML (no div soup)
 - [ ] Focus ring on all interactive elements
