@@ -112,6 +112,13 @@ function InvoiceCardSkeleton() {
 // 4. Populated — the actual component
 ```
 
+**Exception:** loading and error are states of a *fetch*, not of a component. A component that
+has no fetch of its own — it derives everything it renders from props a Server Component parent
+already loaded, synchronously — genuinely only has two states, empty and populated. Adding a
+loading skeleton or error boundary to it would be dead code: nothing async ever puts it in those
+states. Don't build the state you can't reach; do keep the check honest (if the component gains
+its own `useEffect`/fetch/mutation later, it now needs all four again).
+
 ---
 
 ## Interactive States — All Five
@@ -196,7 +203,8 @@ export function InvoiceForm() {
 ## Audit Checklist
 - [ ] RSC by default, `"use client"` only where required
 - [ ] Explicit prop interface defined
-- [ ] All 4 state variants handled (empty, loading, error, populated)
+- [ ] All 4 state variants handled (empty, loading, error, populated) — or just empty/populated
+      if the component genuinely has no fetch of its own
 - [ ] All 5 interactive states styled (default, hover, focus, active, disabled)
 - [ ] Semantic HTML (no div soup)
 - [ ] Focus ring on all interactive elements

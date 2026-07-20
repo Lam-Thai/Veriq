@@ -42,6 +42,7 @@ function platformName(slug: string): string {
 }
 
 function coefficientOfVariation(amounts: number[]): number {
+  if (amounts.length === 0) return 0;
   const mean = amounts.reduce((sum, value) => sum + value, 0) / amounts.length;
   if (mean <= 0) return 0;
   const variance = amounts.reduce((sum, value) => sum + (value - mean) ** 2, 0) / amounts.length;
