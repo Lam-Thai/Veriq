@@ -61,14 +61,17 @@ export const ApiError = {
   }, { status: 422 }),
 }
 
-export function handleApiError(err: unknown): NextResponse {
+export function handleApiError(err: unknown, log: ReturnType<typeof loggerFor>): NextResponse {
   if (err instanceof ZodError) return ApiError.unprocessable(err)
   if (err instanceof NotFoundError) return ApiError.notFound()
   if (err instanceof ConflictError) return ApiError.conflict()
-  console.error('[API Error]', err)
+  log.error({ err }, '[API Error]')
   return ApiError.internal()
 }
 ```
+(`handleApiError` itself is illustrative — the real routes in this repo each call `ApiError.internal()`
+directly from their own top-level `try/catch` rather than going through a shared catch-all; see the
+`error-handling` skill for the real `loggerFor` import and the routes it's actually used in.)
 
 ---
 
@@ -107,16 +110,41 @@ class ErrorResponse(BaseModel):
 
 ---
 
+## Async Job Contract (`202` — real, working example)
+For anything that must not run inline in the request/response cycle (see the `engineering-standards`
+Scalability gate and the `nextjs` skill's `after()` section) — the creating call returns `202`
+immediately with just an id, and a separate poll endpoint reports status, still inside the same
+envelope shape:
+```ts
+// POST /api/report → 202
+{ "data": { "jobId": "cljk3x9..." } }
+
+// GET /api/report/[jobId] → 202 while pending, still not an error
+{ "data": { "status": "PENDING" | "PROCESSING" } }
+
+// GET /api/report/[jobId] → 200 once ready — for a file result this is the raw
+// Content-Type: application/pdf body, not a { data } envelope wrapping it; for a JSON-shaped
+// result, use the normal { data: T } envelope instead
+```
+`app/api/report/route.tsx` (create) + `app/api/report/[jobId]/route.ts` (poll/download) is the
+real, working reference — copy that status-row shape (`PENDING`/`PROCESSING`/`READY`/`FAILED`)
+rather than inventing a new one per feature.
+
+---
+
 ## Internal Service Contract (Next.js → FastAPI)
 
+Real, working example — see `app/api/debug/sentry-test/route.ts`:
 ```ts
-// Next.js calls FastAPI with a short-lived service token
-const token = await createServiceToken(session.user.id, session.user.role)
-const res = await fetch(`${process.env.FASTAPI_URL}/process`, {
+// Next.js calls FastAPI with a short-lived service token (see the `security` skill's Service
+// Tokens section — payload is `sub` only, no role/PII)
+const token = await createServiceToken(clerkUser.id)
+const res = await fetch(new URL('/process', env.FASTAPI_URL), {
   method: 'POST',
   headers: {
     'Authorization': `Bearer ${token}`,
     'Content-Type': 'application/json',
+    'x-request-id': requestId,  // forwards the correlation id — see error-handling skill
   },
   body: JSON.stringify(payload),
 })

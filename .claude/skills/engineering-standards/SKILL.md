@@ -32,7 +32,10 @@ Code that works at 100 rows and falls over at 100k isn't done.
 - Every column used in `WHERE`, `JOIN`, or `ORDER BY` is indexed.
 - No N+1: batch-fetch or `select`/`include` related data in one query — never loop-and-query.
 - Anything expected to take >500ms is dispatched as a background job (`202` pattern), not run
-  inline in the request/response cycle.
+  inline in the request/response cycle — move it to FastAPI (`fastapi-route` agent) if it's
+  Python-portable, or keep it in Next.js behind the `after()`-based async job pattern (`nextjs`
+  skill) if it depends on a Node-only library. Either way, the request that kicks it off returns
+  fast; the work itself never blocks a response.
 - Handlers are stateless — no in-memory state that breaks on a restart or a second instance.
 - Before optimizing a computation, ask whether the result should just be cached
   (Redis, `revalidate`, materialized aggregate) instead.

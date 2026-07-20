@@ -59,47 +59,80 @@ app/api/
 ```
 
 ## Ground Truth (verified against real code in this repo — not aspirational)
-There is no `lib/auth.ts`, `lib/ratelimit.ts`, or `lib/logger.ts` in this repo. Don't import
-them — they don't exist. The real, working precedent for everything below is
-`frontend/app/api/checkout/route.ts` plus `frontend/lib/api-error.ts`.
+There is no `lib/auth.ts`. Don't invent one. The real, working precedent for everything below is
+`frontend/app/api/checkout/route.ts` plus `frontend/lib/api-error.ts`, `frontend/lib/logger.ts`,
+and `frontend/lib/rate-limit.ts`.
 - **Auth**: call `currentUser()` or `auth()` from `@clerk/nextjs/server` directly inside the
   handler. There is no auth wrapper to import.
 - **Errors**: `frontend/lib/api-error.ts` exports an `ApiError` object with only the variants
-  actually in use (`unauthorized`, `notFound`, `internal`, `unprocessable`, `conflict`) — add a
-  new variant there only when a route genuinely needs it, following the same
-  `NextResponse.json({ error: { code, message } }, { status })` shape. There is no
+  actually in use (`unauthorized`, `notFound`, `internal`, `unprocessable`, `conflict`,
+  `tooManyRequests`) — add a new variant there only when a route genuinely needs it, following
+  the same `NextResponse.json({ error: { code, message } }, { status })` shape. There is no
   `handleApiError` catch-all; each route's top-level `try/catch` calls `ApiError.internal()`
   directly.
-- **Logging**: `console.error("[route-name] context", err)` is the current, accepted pattern —
-  see `#file:.github/skills/error-handling.skill.md` for why (no `pino`/`lib/logger.ts` installed yet).
-- **Rate limiting**: no rate-limit infra (`@upstash/ratelimit` or otherwise) is installed in
-  this repo yet. Don't import `@/lib/ratelimit` — it doesn't exist. Note the gap in your
-  output instead of silently omitting it or inventing a fake import; see `#file:.github/skills/security.skill.md`.
+- **Logging**: `pino` is real and installed — `frontend/lib/logger.ts` exports `logger` and
+  `loggerFor(requestId)`. `proxy.ts` stamps an `x-request-id` header on every request; read it
+  with `(await headers()).get("x-request-id") ?? "unknown"` and pass it to `loggerFor()` at the
+  top of the handler, then call e.g. `log.error({ err, ...context }, "[route] message")` —
+  structured first-arg object, message string second, never string concatenation. Do not write a
+  new `console.error`/`console.warn`/`console.log` in a route handler; that's the pattern this
+  replaced (see `app/api/checkout/route.ts` for the real precedent).
+- **Rate limiting**: `frontend/lib/rate-limit.ts` exports `checkRateLimit(key, limit, windowMs)`
+  — real, installed, in-process (see `#file:.github/skills/security.skill.md` for the
+  single-instance caveat). Any route that's a plausible abuse target (creates a DB row, calls a
+  paid third-party API, or is otherwise cheap to hammer) should call it keyed
+  `` `feature:${clerkUser.id}` `` — never by IP — immediately after the auth check, before any
+  other work. See `app/api/checkout/route.ts`, `app/api/report/route.tsx`, and
+  `app/connect/[slug]/callback/route.ts` for three real examples with documented limit/window
+  choices.
+- **Async job pattern for anything genuinely heavy that must stay in Next.js**: if the work is
+  CPU/latency-heavy (>500ms) *and* depends on a Node-only library with no Python port (so it
+  can't move to `fastapi-route.agent.md`), don't run it inline in the handler — use Next's
+  `after()` (from `next/server`) to do the work after the response is sent, backed by a small
+  DB-tracked job status row the client polls. `app/api/report/route.tsx` (job creation,
+  `202 { data: { jobId } }`) + `app/api/report/[jobId]/route.ts` (poll/download) +
+  `lib/report-jobs.tsx` (the actual work) is the real, working reference implementation — copy
+  that shape rather than reinventing it. See `#file:.github/skills/nextjs.skill.md`'s
+  "Async / Background Work" section.
 
 ## Implementation Skeleton
+
 ```ts
 import { NextResponse, type NextRequest } from "next/server";
+import { headers } from "next/headers";
 import { currentUser } from "@clerk/nextjs/server";
 import { z } from "zod";
 import { ApiError } from "@/lib/api-error";
+import { checkRateLimit } from "@/lib/rate-limit";
+import { loggerFor } from "@/lib/logger";
 import { db } from "@/lib/db";
 
 const BodySchema = z.object({
   // field: z.string().min(1).max(255),
 });
 
+const RATE_LIMIT = 10;
+const RATE_LIMIT_WINDOW_MS = 60_000;
+
 export async function POST(request: NextRequest) {
+  const requestId = (await headers()).get("x-request-id") ?? "unknown";
+  const log = loggerFor(requestId);
+
   try {
     // 1. Auth — runs before any other logic, no exceptions
     const clerkUser = await currentUser();
     if (!clerkUser) return ApiError.unauthorized();
 
-    // 2. Parse and validate
+    // 2. Rate limit — keyed per userId, right after auth
+    const { success, resetAt } = checkRateLimit(`resource:${clerkUser.id}`, RATE_LIMIT, RATE_LIMIT_WINDOW_MS);
+    if (!success) return ApiError.tooManyRequests(Math.ceil((resetAt - Date.now()) / 1000));
+
+    // 3. Parse and validate
     const body: unknown = await request.json().catch(() => null);
     const parsed = BodySchema.safeParse(body);
     if (!parsed.success) return ApiError.unprocessable(parsed.error);
 
-    // 3. DB write — always scoped to the authenticated user
+    // 4. DB write — always scoped to the authenticated user
     const result = await db.resource.create({
       data: { ...parsed.data, userId: clerkUser.id },
       select: { id: true, createdAt: true },
@@ -107,7 +140,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ data: result }, { status: 201 });
   } catch (err) {
-    console.error("[POST /api/resource] unhandled error", err);
+    log.error({ err }, "[POST /api/resource] unhandled error");
     return ApiError.internal();
   }
 }
@@ -142,10 +175,14 @@ above — see `frontend/app/api/webhooks/stripe/route.ts` for the real, working 
 ## Audit Checklist
 - [ ] Auth check is first line of every handler (webhook routes: signature check is)
 - [ ] `safeParse` used, not `parse`
-- [ ] Rate limiting gap noted if this route is a plausible abuse target (no infra to apply yet)
+- [ ] Rate limiting applied (`checkRateLimit` from `lib/rate-limit.ts`, keyed per `userId`) if
+      this route is a plausible abuse target
+- [ ] Logging uses `loggerFor(requestId)` from `lib/logger.ts`, not a new `console.*` call
+- [ ] Anything genuinely CPU/latency-heavy (>500ms) and Node-only is backgrounded via the
+      `after()` job pattern (see `app/api/report/route.tsx`), not run inline
 - [ ] Resource ownership: `userId` in `where` clause
 - [ ] `select` on all Prisma queries
 - [ ] No internal error details in response body
-- [ ] Correct HTTP status codes (201 create, 204 delete, 422 validation)
+- [ ] Correct HTTP status codes (201 create, 204 delete, 422 validation, 202 async job accepted)
 - [ ] Webhook routes: raw body used for signature verification, verified before any processing
 - [ ] Passes `#file:.github/skills/engineering-standards.skill.md` Definition of Done

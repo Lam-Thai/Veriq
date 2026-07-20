@@ -62,15 +62,26 @@ Set-Cookie: session=...; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=604800
 - Expiry: 7 days max. Access tokens: 15min. Refresh: 7d.
 
 ## Service Tokens (Next.js → FastAPI)
+
+> **Repo reality check**: this pattern is real, installed, and has a working end-to-end caller —
+> `frontend/lib/service-token.ts` (`createServiceToken`, `jose`) signs, `backend/app/auth.py`
+> (`verify_service_token`/`get_current_user_id`, `python-jose`) verifies. `INTERNAL_JWT_SECRET` is
+> a required field in both `frontend/lib/env.ts` and `backend/app/core/config.py` — it must be the
+> same literal value in both `.env` files. `frontend/app/api/debug/sentry-test/route.ts` is the
+> first real caller (it mints a token and calls FastAPI's `POST /debug/sentry-test`) — copy that
+> shape for the next Next.js → FastAPI call rather than re-deriving the pattern from scratch.
+
 ```ts
-// lib/service-token.ts
-import { SignJWT, jwtVerify } from 'jose'
+// lib/service-token.ts — real, working version (payload is `sub` only, no role/PII)
+import { SignJWT } from 'jose'
+import { env } from '@/lib/env'
 
-const secret = new TextEncoder().encode(process.env.INTERNAL_JWT_SECRET)
+const secret = new TextEncoder().encode(env.INTERNAL_JWT_SECRET)
 
-export async function createServiceToken(userId: string, role: string): Promise<string> {
-  return new SignJWT({ sub: userId, role })
+export async function createServiceToken(clerkUserId: string): Promise<string> {
+  return new SignJWT({ sub: clerkUserId })
     .setProtectedHeader({ alg: 'HS256' })
+    .setIssuedAt()
     .setExpirationTime('5m')  // short-lived — internal only
     .sign(secret)
 }
@@ -129,16 +140,31 @@ const { success } = await ratelimit.limit(session.user.id)
 if (!success) return ApiError.tooManyRequests()
 ```
 
-### FastAPI (slowapi)
+### FastAPI (slowapi — real, installed, wired up)
+`backend/app/core/rate_limit.py` is the real, working precedent — reuse it, don't reinvent a
+`key_func`. Its `rate_limit_key` decodes the caller's service-token JWT and keys on the verified
+`sub` (never the header value un-verified), falling back to `get_remote_address` only when no/an
+invalid token is present — the same "identity over IP" principle as the Next.js limiter, applied
+to a `Bearer` token instead of a session cookie. `rate_limit_exceeded_handler` returns this repo's
+`{ error: { code: "RATE_LIMITED", message } }` envelope (not slowapi's default bare-string body),
+with the `Retry-After`/`X-RateLimit-*` headers slowapi already sets.
+
 ```python
+# app/core/rate_limit.py (already exists — this is what it looks like)
 from slowapi import Limiter
-from slowapi.util import get_remote_address
+from app.core.rate_limit import rate_limit_key  # decodes JWT sub, falls back to remote address
 
-limiter = Limiter(key_func=get_remote_address)
+limiter = Limiter(key_func=rate_limit_key)
 
-@router.post("/public-endpoint")
+# app/main.py — wire once
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
+app.add_middleware(SlowAPIMiddleware)
+
+# In a route — after the auth dependency, same as the Next.js pattern
+@router.post("/endpoint")
 @limiter.limit("10/minute")
-async def public_endpoint(request: Request):
+async def endpoint(request: Request, user_id: str = Depends(get_current_user_id)):
     ...
 ```
 
@@ -362,10 +388,12 @@ treat them as required, not optional.
 | Purpose | Next.js | FastAPI |
 |---|---|---|
 | Validation | `zod` | `pydantic` |
-| Auth | Clerk (`@clerk/nextjs`) | `python-jose` |
-| Rate limit | `lib/rate-limit.ts` (in-process, real) → `@upstash/ratelimit` at multi-instance scale | `slowapi` |
+| Auth (user session) | Clerk (`@clerk/nextjs`) | n/a — FastAPI never talks to Clerk directly |
+| Auth (service call) | `jose` (`lib/service-token.ts`, real) | `python-jose` (`app/auth.py`, real) |
+| Rate limit | `lib/rate-limit.ts` (in-process, real) → `@upstash/ratelimit` at multi-instance scale | `slowapi` (`app/core/rate_limit.py`, real) |
 | Password hash | `bcryptjs` (12 rounds) | `passlib[bcrypt]` |
-| Token sign/verify | `jose` | `python-jose` |
+| Structured logging | `pino` (`lib/logger.ts`, real) | `structlog` (`app/core/logging.py`, real) |
+| Error tracking / APM | `@sentry/nextjs` (real, optional `SENTRY_DSN`) | `sentry-sdk[fastapi]` (real, optional `SENTRY_DSN`) |
 | Env validation | `zod` on `process.env` | `pydantic-settings` |
 
 ## Non-Negotiables

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { logger } from "@/lib/logger";
 
 const EnvSchema = z.object({
   // Pooled (PgBouncer, transaction mode) connection — used by the app's runtime queries.
@@ -30,6 +31,21 @@ const EnvSchema = z.object({
   // card. lib/ai/income-narrative.ts checks for its presence itself and degrades to a typed
   // "error" result when absent, so validation happens at first *use*, not at process boot.
   GEMINI_API_KEY: z.string().min(1).optional(),
+  // Shared HMAC secret for signing/verifying the short-lived service-token JWT this app uses to
+  // call the FastAPI backend (see lib/service-token.ts and .claude/skills/security/SKILL.md's
+  // "Service Tokens" section) — must match FastAPI's INTERNAL_JWT_SECRET exactly. Required, not
+  // optional: unlike GEMINI_API_KEY this isn't an additive feature, it's the auth mechanism for
+  // the backend service this app is built around.
+  INTERNAL_JWT_SECRET: z.string().min(32),
+  // Base URL of the FastAPI backend (e.g. http://localhost:8000, or the deployed service URL).
+  FASTAPI_URL: z.url(),
+  // Sentry DSN for error tracking/APM. Optional — the Sentry SDK no-ops when unset (see
+  // instrumentation.ts), so local dev and CI never need a real project configured.
+  SENTRY_DSN: z.string().min(1).optional(),
+  // Same Sentry DSN, exposed to the browser bundle for client-side error capture
+  // (instrumentation-client.ts, app/global-error.tsx). A DSN is a public project identifier, not
+  // a secret — safe to inline client-side, same as NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY below.
+  NEXT_PUBLIC_SENTRY_DSN: z.string().min(1).optional(),
 });
 
 // `next build`'s "Collecting page data" step imports every route module to statically analyze
@@ -57,6 +73,10 @@ const BUILD_PLACEHOLDERS: Record<keyof z.infer<typeof EnvSchema>, string> = {
   STRIPE_PRICE_ID_PRO: "price_buildplaceholder",
   STRIPE_PRICE_ID_ENTERPRISE: "price_buildplaceholder",
   GEMINI_API_KEY: "gemini-buildplaceholder",
+  INTERNAL_JWT_SECRET: "build-placeholder-secret-at-least-32-chars",
+  FASTAPI_URL: "http://localhost:8000",
+  SENTRY_DSN: "build-placeholder-dsn",
+  NEXT_PUBLIC_SENTRY_DSN: "build-placeholder-dsn",
 };
 
 function loadEnv(): z.infer<typeof EnvSchema> {
@@ -68,11 +88,12 @@ function loadEnv(): z.infer<typeof EnvSchema> {
   if (!isProductionBuildPhase) throw parsed.error;
 
   const missing = parsed.error.issues.map((issue) => issue.path.join(".")).join(", ");
-  console.warn(
-    `[env] Missing/invalid env var(s) during \`next build\`: ${missing}. Using build-only ` +
-      "placeholders so the build can complete — this is expected for a CI build step that " +
-      "doesn't serve real traffic. It is NOT expected for `next start`/`next dev`/a real " +
-      "deployment, which still validate strictly and will fail loudly if truly misconfigured.",
+  logger.warn(
+    { missing },
+    "[env] Missing/invalid env var(s) during `next build` — using build-only placeholders so " +
+      "the build can complete. This is expected for a CI build step that doesn't serve real " +
+      "traffic; it is NOT expected for `next start`/`next dev`/a real deployment, which still " +
+      "validate strictly and fail loudly if truly misconfigured.",
   );
 
   const merged = Object.fromEntries(

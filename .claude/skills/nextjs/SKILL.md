@@ -1,6 +1,6 @@
 ---
 name: nextjs
-description: Next.js App Router patterns — RSC vs client component decision, folder conventions, data fetching/caching, Server Actions, middleware auth guards, and security headers. Use when building Next.js routes, pages, layouts, or mutations.
+description: Next.js App Router patterns — RSC vs client component decision, folder conventions, data fetching/caching, Server Actions, middleware auth guards, security headers, and the after()-based async background-job pattern for heavy Node-only work. Use when building Next.js routes, pages, layouts, or mutations.
 ---
 
 # Skill: Next.js (App Router)
@@ -99,6 +99,48 @@ const proxy = clerkMiddleware(async (auth, req) => {
 export default proxy
 export const config = { matcher: ['/((?!_next|.*\\..*).*)', '/(api|trpc)(.*)'] }
 ```
+
+## Async / Background Work (`after()`)
+A request handler must never block on genuinely CPU/latency-heavy work (>500ms — see the
+`engineering-standards` skill's Scalability gate). If that work is Python-portable, move it to
+`fastapi-route` instead. If it depends on a **Node-only library with no Python port** (e.g.
+`@react-pdf/renderer` — no FastAPI equivalent exists without rewriting the whole template in a
+different language, which is its own kind of scope creep), it has to stay in Next.js — but it
+still can't run inline. Use Next's `after()` (stable since 15.1, `import { after } from
+'next/server'`) to schedule the work *after* the response is sent, backed by a small DB-tracked
+job-status row the client polls:
+
+```ts
+// app/api/report/route.tsx (real, working reference implementation)
+export async function POST(request: NextRequest) {
+  // ...auth, rate limit, validate...
+  const job = await createReportJob(userId, params)      // PENDING row
+  after(() => runReportJob(job.id, clerkUser, params))    // does the real work post-response
+  return NextResponse.json({ data: { jobId: job.id } }, { status: 202 })
+}
+
+// app/api/report/[jobId]/route.ts — client polls this
+export async function GET(_req: Request, ctx: RouteContext<'/api/report/[jobId]'>) {
+  const { jobId } = await ctx.params
+  const job = await db.reportJob.findFirst({ where: { id: jobId, user: { clerkId: userId } } })
+  if (!job) return ApiError.notFound()                              // 404, not 403 — ownership check
+  if (job.status === 'PENDING' || job.status === 'PROCESSING')
+    return NextResponse.json({ data: { status: job.status } }, { status: 202 })
+  // READY: return the actual result; FAILED: return a typed error
+}
+```
+Notes:
+- `after()` works on this app's real deployment targets (Node.js server, Docker) without any
+  extra setup — see `node_modules/next/dist/docs/.../after.md`'s Platform Support table. It needs
+  a custom `waitUntil` wiring only on serverless platforms this repo doesn't target.
+- `after()` still runs within the same process/deployment — it decouples the *response* from the
+  work, not the compute itself. It's not a substitute for a real queue if the workload is large
+  enough to need independent scaling; it's the right-sized fix for "one slow render shouldn't tie
+  up a request," not a general job-queue replacement.
+- The client side needs to actually poll — see `hooks/use-report-download.ts` for the real
+  create → poll → download pattern, reused by every UI trigger for this kind of feature.
+- Don't build this for work that's merely inconvenient to await — it's for genuinely heavy work
+  that would otherwise tie up a request/serverless invocation for its full duration.
 
 ## Security Headers (next.config.ts)
 ```ts

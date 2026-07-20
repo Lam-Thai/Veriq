@@ -19,7 +19,7 @@ is the only payment provider integrated.
 | `#file:.github/skills/prisma.skill.md` | Schema/query patterns for the local subscription record |
 | `#file:.github/skills/api-contracts.skill.md` | Response envelope shape |
 | `#file:.github/skills/security.skill.md` | Server-only guard pattern, secret handling, rate-limiting reality check |
-| `#file:.github/skills/error-handling.skill.md` | Logging pattern (console.error until pino lands — see that skill) |
+| `#file:.github/skills/error-handling.skill.md` | Structured logging (`loggerFor(requestId)` from `lib/logger.ts`) |
 | `#file:.github/skills/engineering-standards.skill.md` | Security/scalability/readability bar — applies to all output |
 
 ---

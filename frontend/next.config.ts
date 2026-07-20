@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { withSentryConfig } from "@sentry/nextjs";
 
 const securityHeaders = [
   { key: "X-Frame-Options", value: "DENY" },
@@ -18,4 +19,11 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+// `withSentryConfig` wires source-map upload at build time — it no-ops gracefully without
+// SENTRY_AUTH_TOKEN/org/project configured (not set up in this repo yet), so this is safe with
+// zero additional config; `silent: true` just keeps that "not configured" notice out of normal
+// build output.
+export default withSentryConfig(nextConfig, {
+  silent: true,
+  webpack: { treeshake: { removeDebugLogging: true } },
+});

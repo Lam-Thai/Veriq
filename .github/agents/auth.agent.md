@@ -49,7 +49,9 @@ is wired up yet.
    `frontend/.env.example` — no real keys, and confirm `!.env.example` isn't accidentally
    swept up by a blanket `.env*` gitignore rule.
 5. Add per-resource ownership checks in API routes, scoped to `auth().userId`.
-6. Generate the service-token format that FastAPI validates.
+6. For a new Next.js → FastAPI call, mint a token via the existing `createServiceToken` in
+   `lib/service-token.ts` (don't reinvent the format — `backend/app/auth.py` already validates
+   this exact shape).
 7. **Before calling this done**: verify `next build && next start` (not just `next build`) with
    no real Clerk keys set — see "The build-succeeded trap" below. If CI runs a production build,
    confirm the two Clerk secrets are actually present as repo secrets under the exact names the
@@ -144,27 +146,38 @@ secret name and env var name is exactly the kind of mismatch that only surfaces 
 ## FastAPI Service Authentication
 
 Next.js issues a short-lived JWT that FastAPI validates on every request — get the userId from
-Clerk's `auth()`, not from a next-auth session object.
+Clerk's `auth()`/`currentUser()`, not from a next-auth session object.
+
+> **Real, working — not aspirational**: `frontend/lib/service-token.ts` (mint) and
+> `backend/app/auth.py`'s `verify_service_token`/`get_current_user_id` (verify) both exist.
+> `INTERNAL_JWT_SECRET` is a **required** field in both `frontend/lib/env.ts` and
+> `backend/app/core/config.py` (must be the identical value in both services' env files) —
+> `FASTAPI_URL` is required in `lib/env.ts` too. `app/api/debug/sentry-test/route.ts` is the
+> first real end-to-end caller; copy its shape for the next Next.js → FastAPI call.
 
 ```ts
-// lib/service-token.ts — Next.js generates this for internal service calls
-import { auth } from "@clerk/nextjs/server";
+// lib/service-token.ts (already exists) — takes the caller's already-resolved Clerk id rather
+// than calling auth() internally, since every real caller already has `clerkUser` from its own
+// currentUser() check
+import "server-only";
 import { SignJWT } from "jose";
+import { env } from "@/lib/env";
 
-export async function createServiceToken() {
-  const { userId } = await auth();
-  if (!userId) throw new Error("Unauthorized");
+const secret = new TextEncoder().encode(env.INTERNAL_JWT_SECRET);
 
-  return new SignJWT({ sub: userId })
+export async function createServiceToken(clerkUserId: string): Promise<string> {
+  return new SignJWT({ sub: clerkUserId })
     .setProtectedHeader({ alg: "HS256" })
+    .setIssuedAt()
     .setExpirationTime("5m") // short-lived, internal use only
-    .sign(new TextEncoder().encode(process.env.INTERNAL_JWT_SECRET));
+    .sign(secret);
 }
 
-// Usage: attach to outbound fetch calls to FastAPI
-const token = await createServiceToken();
-const res = await fetch(`${process.env.FASTAPI_URL}/process`, {
-  headers: { Authorization: `Bearer ${token}` },
+// Usage: attach to outbound fetch calls to FastAPI (forward the request-id too — see
+// error-handling.skill.md's Correlation IDs section)
+const token = await createServiceToken(clerkUser.id);
+const res = await fetch(new URL("/process", env.FASTAPI_URL), {
+  headers: { Authorization: `Bearer ${token}`, "x-request-id": requestId },
 });
 ```
 

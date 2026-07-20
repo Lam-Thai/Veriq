@@ -61,6 +61,19 @@ toggle inside a server-rendered nav), say so in a one-line comment on the compon
 state what it owns and why it's isolated. The next reader shouldn't have to guess why one
 file in a folder of server components has `"use client"`.
 
+**Driving a create → poll → result UI for a backgrounded job.** When the action a component
+triggers is handled by the `nextjs` skill's `after()`-based async job pattern (the route returns
+`202 { data: { jobId } }` immediately, not the final result), the component can't just await one
+fetch — it needs to create the job, poll a status endpoint, and only then act on the result (e.g.
+trigger a file download). Factor that create/poll/act loop into one hook shared by every trigger
+of the same job type, rather than duplicating polling logic per component — real example:
+`hooks/use-report-download.ts`, used by both `components/dashboard/report-panel.tsx` (quick
+download) and `report-builder.tsx` (customized download). Surface a `"generating"` state on the
+triggering control (disable it, swap its label — see `report-panel.tsx`) and a `"error"` state
+with an inline `role="alert"` message using the `text-danger` token (see
+`app/connect/[slug]/consent/consent-actions.tsx` for the exact styling precedent), not a silent
+failure or an infinite spinner.
+
 **Pairing an async view with a synchronous fallback.** When a client component depends on an
 external service that can degrade (rate limits, a third-party outage, a flaky API), consider
 placing a plain Server Component next to it that renders a fallback view from data the page

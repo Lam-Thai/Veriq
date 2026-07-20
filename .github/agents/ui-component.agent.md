@@ -48,6 +48,19 @@ Push `"use client"` as far down the tree as possible — only the leaf that need
 interactivity should be a client component. Wrap it in a Server Component parent
 that fetches data.
 
+**Driving a create → poll → result UI for a backgrounded job.** When the action a component
+triggers is handled by `#file:.github/skills/nextjs.skill.md`'s `after()`-based async job pattern
+(the route returns `202 { data: { jobId } }` immediately, not the final result), the component
+can't just await one fetch — it needs to create the job, poll a status endpoint, and only then
+act on the result (e.g. trigger a file download). Factor that create/poll/act loop into one hook
+shared by every trigger of the same job type, rather than duplicating polling logic per
+component — real example: `hooks/use-report-download.ts`, used by both
+`components/dashboard/report-panel.tsx` (quick download) and `report-builder.tsx` (customized
+download). Surface a `"generating"` state on the triggering control (disable it, swap its label —
+see `report-panel.tsx`) and an `"error"` state with an inline `role="alert"` message using the
+`text-danger` token (see `app/connect/[slug]/consent/consent-actions.tsx` for the exact styling
+precedent), not a silent failure or an infinite spinner.
+
 ---
 
 ## File Structure
