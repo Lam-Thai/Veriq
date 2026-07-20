@@ -143,6 +143,7 @@ invalid token is present — the same "identity over IP" principle as the Next.j
 to a `Bearer` token instead of a session cookie. `rate_limit_exceeded_handler` returns this repo's
 `{ error: { code: "RATE_LIMITED", message } }` envelope (not slowapi's default bare-string body),
 with the `Retry-After`/`X-RateLimit-*` headers slowapi already sets.
+
 ```python
 # app/core/rate_limit.py (already exists — this is what it looks like)
 from slowapi import Limiter

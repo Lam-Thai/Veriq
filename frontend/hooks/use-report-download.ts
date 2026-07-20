@@ -80,7 +80,19 @@ export function useReportDownload() {
         await sleep(POLL_INTERVAL_MS);
         const pollResponse = await fetch(`/api/report/${jobId}`);
 
-        if (pollResponse.status === 429) throw new Error(retryAfterMessage(pollResponse));
+        if (pollResponse.status === 429) {
+          // The poll rate limit is sized to comfortably cover a full MAX_POLLS run (see
+          // app/api/report/[jobId]/route.ts), so this should only ever be a rare edge case (e.g.
+          // two tabs polling the same job) — back off for the server's own Retry-After window and
+          // keep polling within this same bounded loop, rather than failing the whole download.
+          const retryAfterSeconds = Number(pollResponse.headers.get("Retry-After"));
+          const waitMs =
+            Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0
+              ? retryAfterSeconds * 1000
+              : POLL_INTERVAL_MS;
+          await sleep(waitMs);
+          continue;
+        }
 
         if (pollResponse.headers.get("Content-Type")?.includes("application/pdf")) {
           const blob = await pollResponse.blob();

@@ -27,6 +27,7 @@ actually portable first.
 ---
 
 ## Ground Truth (verified against real code in this repo — not aspirational)
+
 Every skeleton in this doc below has a real, working counterpart already in `backend/` — extend
 these, don't recreate them from scratch:
 - **Auth**: `app/auth.py` — `verify_service_token` / `get_current_user_id`, exactly the shape in

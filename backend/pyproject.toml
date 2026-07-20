@@ -35,9 +35,16 @@ select = ["E", "F", "I", "UP", "B", "S", "ASYNC"]
 "tests/**" = ["S101"]
 
 [tool.ruff.lint.flake8-bugbear]
-# FastAPI's `Depends(...)` / `Security(...)` default-arg pattern is the framework's own
-# dependency-injection mechanism, not the mutable-default footgun B008 targets.
-extend-immutable-calls = ["fastapi.Depends", "fastapi.Security"]
+# FastAPI's `Depends(...)` / `Security(...)` / `Query(...)` / `Path(...)` / `Body(...)`
+# default-arg pattern is the framework's own dependency-injection/parameter-declaration
+# mechanism, not the mutable-default footgun B008 targets.
+extend-immutable-calls = [
+    "fastapi.Depends",
+    "fastapi.Security",
+    "fastapi.Query",
+    "fastapi.Path",
+    "fastapi.Body",
+]
 
 [tool.mypy]
 strict = true

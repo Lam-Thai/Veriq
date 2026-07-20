@@ -2,8 +2,10 @@ import time
 import uuid
 from collections.abc import Awaitable, Callable
 
+import sentry_sdk
 import structlog
 from fastapi import Request, Response
+from fastapi.responses import JSONResponse
 
 from app.core.logging import log
 
@@ -26,7 +28,12 @@ async def request_context_middleware(
 
     try:
         response = await call_next(request)
-    except Exception:
+    except Exception as exc:
+        # Convert into our own response (rather than re-raising) so this middleware can attach
+        # X-Request-Id below and shape the body as this repo's standard {"error": ...} envelope —
+        # Starlette's default unhandled-exception handling does neither. Capturing here explicitly
+        # is required precisely because we no longer let the exception propagate to Sentry's
+        # automatic ASGI-level capture; without this, the error would go unreported.
         duration_ms = round((time.perf_counter() - start) * 1000, 2)
         log.exception(
             "request.failed",
@@ -34,7 +41,11 @@ async def request_context_middleware(
             path=request.url.path,
             duration_ms=duration_ms,
         )
-        raise
+        sentry_sdk.capture_exception(exc)
+        response = JSONResponse(
+            {"error": {"code": "INTERNAL", "message": "Something went wrong"}},
+            status_code=500,
+        )
     finally:
         structlog.contextvars.clear_contextvars()
 

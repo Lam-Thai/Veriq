@@ -36,11 +36,19 @@ async def test_debug_route_is_404_in_production(monkeypatch: pytest.MonkeyPatch)
 
 @pytest.mark.anyio
 async def test_debug_route_raises_outside_production() -> None:
+    """The route's deliberate RuntimeError is caught by request_context_middleware (not left to
+    propagate uncaught) — it logs, reports to Sentry, and returns the standard error envelope
+    with a request id, same as any other unhandled exception in this API."""
     token = _make_token()
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
-        with pytest.raises(RuntimeError, match="Deliberate Sentry test error"):
-            await client.post("/debug/sentry-test", headers={"Authorization": f"Bearer {token}"})
+        response = await client.post(
+            "/debug/sentry-test", headers={"Authorization": f"Bearer {token}"}
+        )
+
+    assert response.status_code == 500
+    assert response.json() == {"error": {"code": "INTERNAL", "message": "Something went wrong"}}
+    assert response.headers.get("X-Request-Id")
 
 
 @pytest.fixture

@@ -9,10 +9,13 @@ import { loggerFor } from "@/lib/logger";
 // Reads Prisma via the pg driver adapter — needs Node APIs, never Edge.
 export const runtime = "nodejs";
 
-// A poller hitting this every ~1s while a job renders is expected traffic, not abuse — generous
-// relative to the 5/5min limit on job creation (app/api/report/route.tsx).
-const RATE_LIMIT = 30;
-const RATE_LIMIT_WINDOW_MS = 60_000;
+// A poller hitting this every ~1s while a job renders is expected traffic, not abuse — sized to
+// comfortably cover the client's full polling budget (hooks/use-report-download.ts polls up to
+// MAX_POLLS=120 times at POLL_INTERVAL_MS=1000, i.e. up to 120 requests over ~120s) plus margin,
+// not just the 5/5min limit on job creation (app/api/report/route.tsx). A tighter window here
+// would start 429ing a single legitimate poller partway through a genuinely slow render.
+const RATE_LIMIT = 150;
+const RATE_LIMIT_WINDOW_MS = 120_000;
 
 /**
  * Polls (and ultimately downloads) an async report job created by `POST /api/report`. Ownership
