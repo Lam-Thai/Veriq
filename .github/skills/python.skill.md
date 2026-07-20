@@ -178,17 +178,22 @@ async def get_invoice(
 
 ## Toolbelt
 
-| Purpose | Library |
-|---|---|
-| Web framework | `fastapi` |
-| Validation | `pydantic` v2 |
-| Async ORM | `sqlalchemy[asyncio]` + `asyncpg` |
-| HTTP client | `httpx` |
-| Auth / JWT | `python-jose[cryptography]` |
-| Rate limiting | `slowapi` |
-| Password hashing | `passlib[bcrypt]` |
-| Env config | `pydantic-settings` |
-| Logging | `structlog` |
-| Testing | `pytest` + `pytest-anyio` + `httpx` |
-| Linting | `ruff` |
-| Type checking | `mypy --strict` |
+| Purpose | Library | Real precedent in this repo |
+|---|---|---|
+| Web framework | `fastapi` | `app/main.py` |
+| Validation | `pydantic` v2 | — |
+| Async ORM | `sqlalchemy[asyncio]` + `asyncpg` | not wired up yet — no FastAPI-side DB usage exists yet, see `sqlalchemy.skill.md` for the target shape |
+| HTTP client | `httpx` | — |
+| Auth / JWT | `python-jose[cryptography]` | `app/auth.py` (`verify_service_token`, `get_current_user_id`) |
+| Rate limiting | `slowapi` | `app/core/rate_limit.py` |
+| Password hashing | `passlib[bcrypt]` | not used yet — Clerk owns all real user auth, this repo has no local password storage |
+| Env config | `pydantic-settings` | `app/core/config.py` |
+| Logging | `structlog` | `app/core/logging.py` + `app/core/middleware.py` (request-id + access log) |
+| Error tracking | `sentry-sdk[fastapi]` | `app/main.py` (guarded on `settings.SENTRY_DSN`) |
+| Testing | `pytest` + `pytest-anyio` + `httpx` | `tests/test_auth.py`, `tests/test_debug.py`, `tests/test_health.py` |
+| Linting | `ruff` | — |
+| Type checking | `mypy --strict` | — |
+
+For anything with a "real precedent" file, extend that file — don't re-derive the pattern from
+this table's aspirational shape. `app/api/debug.py`'s `POST /debug/sentry-test` route ties auth,
+rate limiting, and logging together in one small real example.

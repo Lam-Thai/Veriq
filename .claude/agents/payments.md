@@ -27,7 +27,7 @@ Consult these skills (`.claude/skills/<name>/SKILL.md`) before and while working
 | `prisma` | Schema/query patterns for the local subscription record |
 | `api-contracts` | Response envelope shape |
 | `security` | Server-only guard pattern, secret handling, rate-limiting reality check |
-| `error-handling` | Logging pattern (console.error until pino lands — see that skill) |
+| `error-handling` | Structured logging (`loggerFor(requestId)` from `lib/logger.ts`) |
 | `engineering-standards` | Security/scalability/readability bar — applies to all output |
 
 ---

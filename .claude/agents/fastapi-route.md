@@ -18,9 +18,41 @@ Routes that belong in FastAPI — not in Next.js API routes:
 | Document ingestion and chunking | Memory-intensive processing |
 | Batch inference / async processing | Background task dispatch |
 | Data aggregation over large datasets | Heavy DB queries, avoid blocking UI |
-| Long-running computation (>500ms) | Don't block Next.js event loop |
+| Long-running computation (>500ms) — Python-portable | Don't block Next.js event loop |
+
+**Exception**: if the heavy work depends on a **Node-only library with no Python port** (e.g.
+`@react-pdf/renderer` — there's no FastAPI equivalent without rewriting the whole thing in a
+different library/language, which is its own scope creep, not a genuine port), it can't move
+here even past the 500ms bar. It stays in Next.js behind the `after()`-based async job pattern
+instead — see the `nextjs` skill and `app/api/report/route.tsx` for the real reference. Don't
+assume ">500ms" alone always means "move it to FastAPI" — confirm the work is actually portable
+first.
 
 **Use the `api-route` agent instead** for standard CRUD that is session-gated and tightly coupled to the frontend.
+
+---
+
+## Ground Truth (verified against real code in this repo — not aspirational)
+Every skeleton in this doc below has a real, working counterpart already in `backend/` — extend
+these, don't recreate them from scratch:
+- **Auth**: `app/auth.py` — `verify_service_token` / `get_current_user_id`, exactly the shape in
+  "Service Token Verification" below.
+- **Rate limiting**: `app/core/rate_limit.py` — `limiter` (slowapi) + `rate_limit_key` (decodes
+  the caller's verified JWT `sub`, falls back to `get_remote_address` only when no/invalid token
+  is present) + `rate_limit_exceeded_handler` (returns this repo's `{ error: {...} }` envelope,
+  not slowapi's default body). Wired once in `main.py` (`app.state.limiter`, exception handler,
+  `SlowAPIMiddleware`); apply `@limiter.limit("N/period")` per route. See the `security` skill.
+- **Structured logging + correlation id**: `app/core/logging.py` (structlog, already configured)
+  + `app/core/middleware.py`'s `request_context_middleware` (binds `X-Request-Id` via
+  `structlog.contextvars`, logs one `request.completed`/`request.failed` line per request). Wired
+  once in `main.py`. See the `error-handling` skill.
+- **Sentry**: guarded on `settings.SENTRY_DSN` in `main.py` — `sentry_sdk.init(...)` with
+  `StarletteIntegration()` + `FastApiIntegration()`. Unhandled exceptions are captured
+  automatically; don't add manual `capture_exception` calls per route.
+- **Real example route**: `app/api/debug.py`'s `POST /debug/sentry-test` — auth-gated, rate-limited,
+  environment-gated (404 outside non-production) — is a complete, working small route using all
+  four of the above together. Copy its shape for the next protected route rather than assembling
+  the pieces from memory.
 
 ---
 
@@ -112,7 +144,7 @@ app = create_app()
 ## Service Token Verification
 
 ```python
-# app/auth.py
+# app/auth.py (already exists — this is what it looks like)
 from fastapi import Depends, HTTPException
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import jwt, JWTError
