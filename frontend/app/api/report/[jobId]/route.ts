@@ -18,11 +18,14 @@ const RATE_LIMIT = 150;
 const RATE_LIMIT_WINDOW_MS = 120_000;
 
 /**
- * Polls (and ultimately downloads) an async report job created by `POST /api/report`. Ownership
- * is enforced via the relation filter below (`user.clerkId`), not a bare `id` lookup — see
- * .claude/skills/security/SKILL.md's ownership pattern — so a job id alone never lets one user
- * read another's report; a job that doesn't belong to the caller 404s exactly like one that
- * doesn't exist (no 403 — see the same skill's "404 for ownership failures" rule).
+ * Polls (and ultimately downloads) an async report job created by `POST /api/report` — and, since
+ * a READY job's `pdfData` is kept indefinitely, also serves as the direct download link for any
+ * past job in the dashboard's Report history (see report-panel.tsx's plain `<a href>` per row;
+ * no polling needed there since the job is already READY). Ownership is enforced via the relation
+ * filter below (`user.clerkId`), not a bare `id` lookup — see .claude/skills/security/SKILL.md's
+ * ownership pattern — so a job id alone never lets one user read another's report; a job that
+ * doesn't belong to the caller 404s exactly like one that doesn't exist (no 403 — see the same
+ * skill's "404 for ownership failures" rule).
  */
 export async function GET(_request: Request, ctx: RouteContext<"/api/report/[jobId]">) {
   const clerkUser = await currentUser();
@@ -38,7 +41,7 @@ export async function GET(_request: Request, ctx: RouteContext<"/api/report/[job
 
   const job = await db.reportJob.findFirst({
     where: { id: jobId, user: { clerkId: clerkUser.id } },
-    select: { status: true, pdfData: true, filename: true, expiresAt: true },
+    select: { status: true, pdfData: true, filename: true },
   });
   if (!job) return ApiError.notFound();
 
@@ -51,13 +54,9 @@ export async function GET(_request: Request, ctx: RouteContext<"/api/report/[job
     return ApiError.internal();
   }
 
-  // READY. Expiry is checked by timestamp rather than trusting pdfData's presence alone — a
-  // legitimately expired job (see lib/report-jobs.tsx's clearExpiredReportJobPayloads) is an
-  // expected state, not the "marked READY but missing bytes" bug case below.
-  if (job.expiresAt < new Date()) {
-    return ApiError.conflict("REPORT_EXPIRED", "This report has expired — generate a new one to download it again.");
-  }
-
+  // READY — a job's pdfData is kept indefinitely (see the ReportJob model's comment in
+  // schema.prisma), so a missing pdfData/filename here is a data-integrity bug, not an expected
+  // "expired" state.
   if (!job.pdfData || !job.filename) {
     log.error({ jobId }, "[report] job marked READY but missing pdfData/filename");
     return ApiError.internal();

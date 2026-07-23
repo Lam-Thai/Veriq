@@ -14,14 +14,6 @@ import { ReportJobStatus } from "@/lib/generated/prisma/enums";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-// How long a READY job's PDF bytes stay downloadable before being treated as expired — long
-// enough for a slow client/poll to still fetch it, short enough not to keep stale report bytes
-// around in Postgres indefinitely (see the ReportJob model's comment in schema.prisma).
-const READY_TTL_MS = 15 * 60 * 1000;
-// FAILED rows are kept a bit longer than READY ones so a failure is actually inspectable
-// (logs/DB) rather than vanishing before anyone notices.
-const FAILED_TTL_MS = 60 * 60 * 1000;
-
 // `platformsParam` is a raw, client-supplied comma-separated string, so this only ever narrows
 // `connections` (already scoped to the authed user) down by intersection — it can never widen
 // the result to include another user's data.
@@ -54,21 +46,6 @@ function buildReportData(clerkUser: User, connections: UserConnection[]): Report
   const rangeLabel = `${MONTHLY_BARS.at(0)!.month} – ${MONTHLY_BARS.at(-1)!.month} ${new Date().getFullYear()}`;
 
   return { generatedAt: new Date(), userName, rangeLabel, totalVerified, bySource };
-}
-
-/**
- * Clears the PDF bytes (not the row) off this user's own expired ReportJob rows. Called
- * opportunistically before creating a new job (see app/api/report/route.tsx) rather than via a
- * cron/scheduler — same "cheap inline cleanup, no scheduler" precedent lib/rate-limit.ts already
- * uses for its in-process buckets. The row itself survives so report history (getReportHistory
- * below) stays available after the PDF bytes are gone — only `pdfData`/`filename` are dropped;
- * `status`/`createdAt`/`platformsParam` are untouched.
- */
-export async function clearExpiredReportJobPayloads(userId: string): Promise<void> {
-  await db.reportJob.updateMany({
-    where: { userId, expiresAt: { lt: new Date() }, pdfData: { not: null } },
-    data: { pdfData: null, filename: null },
-  });
 }
 
 /**
@@ -128,37 +105,31 @@ export type ReportHistoryEntry = {
    * connections at the time." Left for the caller to resolve into display names (see
    * report-panel.tsx) since that needs findPlatformBySlug, a client-safe lookup. */
   platformsParam: string | null;
-  /** A READY job whose `expiresAt` has passed — its `pdfData` may or may not have been cleared
-   * yet by clearExpiredReportJobPayloads, so this is derived from `expiresAt` rather than trusted
-   * from `status` alone (no new "EXPIRED" enum value was added — see schema.prisma). */
-  isExpired: boolean;
   /** Only set for READY jobs — computed from the *current* resolved plan's reportValidityDays,
    * since no schema change added a per-job plan snapshot. */
   validUntil: Date | null;
 };
 
 /**
- * Up to the 25 most recent report jobs for this user, newest first — metadata-only history that
- * survives PDF expiry (see clearExpiredReportJobPayloads above). Shown in the dashboard's Report
- * tab regardless of whether the underlying PDF bytes are still downloadable. Takes an already-
- * resolved internal `userId`/`reportValidityDays` — see getReportHistory below for the Clerk-id
- * convenience wrapper.
+ * Up to the 25 most recent report jobs for this user, newest first — metadata-only history, plus
+ * a READY job's PDF stays downloadable indefinitely (see the ReportJob model's comment in
+ * schema.prisma). Shown in the dashboard's Report tab. Takes an already-resolved internal
+ * `userId`/`reportValidityDays` — see getReportHistory below for the Clerk-id convenience
+ * wrapper.
  */
 export async function getReportHistoryForUser(userId: string, reportValidityDays: number): Promise<ReportHistoryEntry[]> {
   const jobs = await db.reportJob.findMany({
     where: { userId },
     orderBy: { createdAt: "desc" },
     take: 25,
-    select: { id: true, status: true, createdAt: true, platformsParam: true, expiresAt: true },
+    select: { id: true, status: true, createdAt: true, platformsParam: true },
   });
 
-  const now = new Date();
   return jobs.map((job) => ({
     id: job.id,
     status: job.status,
     createdAt: job.createdAt,
     platformsParam: job.platformsParam,
-    isExpired: job.status === ReportJobStatus.READY && job.expiresAt < now,
     validUntil:
       job.status === ReportJobStatus.READY ? new Date(job.createdAt.getTime() + reportValidityDays * DAY_MS) : null,
   }));
@@ -211,14 +182,7 @@ export async function createReportJobIfAllowed(
     }
 
     const job = await tx.reportJob.create({
-      data: {
-        userId,
-        status: "PENDING",
-        platformsParam,
-        // Conservative expiry up front (the FAILED window) — runReportJob narrows this to the
-        // shorter READY_TTL_MS once the render actually succeeds.
-        expiresAt: new Date(Date.now() + FAILED_TTL_MS),
-      },
+      data: { userId, status: "PENDING", platformsParam },
       select: { id: true },
     });
     return { ok: true, jobId: job.id };
@@ -280,7 +244,6 @@ export async function runReportJob(jobId: string, clerkUser: User, platformsPara
         // as-is even though the bytes are identical.
         pdfData: new Uint8Array(buffer),
         filename,
-        expiresAt: new Date(Date.now() + READY_TTL_MS),
       },
     });
 
@@ -290,11 +253,7 @@ export async function runReportJob(jobId: string, clerkUser: User, platformsPara
     await db.reportJob
       .update({
         where: { id: jobId },
-        data: {
-          status: "FAILED",
-          error: "Report generation failed",
-          expiresAt: new Date(Date.now() + FAILED_TTL_MS),
-        },
+        data: { status: "FAILED", error: "Report generation failed" },
       })
       .catch((updateErr) => {
         log.error({ err: updateErr }, "[report-job] failed to persist FAILED status");

@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { UserProfile } from "@clerk/nextjs";
 import { currentUser } from "@clerk/nextjs/server";
+import { DashboardHeader } from "@/components/dashboard/dashboard-header";
 import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 import { OverviewPanel } from "@/components/dashboard/overview-panel";
 import { ReportPanel } from "@/components/dashboard/report-panel";
@@ -36,38 +37,41 @@ export default async function DashboardPage() {
     : [[], null];
 
   return (
-    <main className="min-h-screen bg-gradient-flow-light px-6 py-16">
-      <div className="mx-auto max-w-grid text-center">
-        <h1 className="text-(length:--type-tagline-size)/(--type-tagline-lh) font-semibold text-ink">
-          Welcome, {displayName}
-        </h1>
-      </div>
+    <>
+      <DashboardHeader />
+      <main className="min-h-screen bg-gradient-flow-light px-6 py-16">
+        <div className="mx-auto max-w-grid text-center">
+          <h1 className="text-(length:--type-tagline-size)/(--type-tagline-lh) font-semibold text-ink">
+            Welcome, {displayName}
+          </h1>
+        </div>
 
-      <div className="mt-10">
-        <DashboardShell
-          overview={
-            <OverviewPanel
-              stats={stats}
-              connections={connections}
-              connectedSlugs={connectedSlugs}
-              maxPlatforms={limits.maxPlatforms}
-            />
-          }
-          report={
-            <ReportPanel
-              hasConnections={connections.length > 0}
-              history={reportHistory}
-              nextReportAvailableAt={nextReportAvailableAt}
-              reportValidityDays={limits.reportValidityDays}
-            />
-          }
-          account={
-            <div className="flex justify-center">
-              <UserProfile routing="hash" />
-            </div>
-          }
-        />
-      </div>
-    </main>
+        <div className="mt-10">
+          <DashboardShell
+            overview={
+              <OverviewPanel
+                stats={stats}
+                connections={connections}
+                connectedSlugs={connectedSlugs}
+                maxPlatforms={limits.maxPlatforms}
+              />
+            }
+            report={
+              <ReportPanel
+                hasConnections={connections.length > 0}
+                history={reportHistory}
+                nextReportAvailableAt={nextReportAvailableAt}
+                reportValidityDays={limits.reportValidityDays}
+              />
+            }
+            account={
+              <div className="flex justify-center">
+                <UserProfile routing="hash" />
+              </div>
+            }
+          />
+        </div>
+      </main>
+    </>
   );
 }

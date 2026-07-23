@@ -6,7 +6,7 @@ import { ApiError } from "@/lib/api-error";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { getUserConnections } from "@/lib/dashboard-data";
 import { db } from "@/lib/db";
-import { clearExpiredReportJobPayloads, createReportJobIfAllowed, filterConnections, runReportJob } from "@/lib/report-jobs";
+import { createReportJobIfAllowed, filterConnections, runReportJob } from "@/lib/report-jobs";
 import { resolveUserPlan } from "@/lib/plan-resolution";
 import { PLAN_LIMITS } from "@/lib/plan-limits";
 import { loggerFor } from "@/lib/logger";
@@ -60,10 +60,6 @@ export async function POST(request: NextRequest) {
 
   const plan = await resolveUserPlan(clerkUser.id);
   const limits = PLAN_LIMITS[plan];
-
-  await clearExpiredReportJobPayloads(user.id).catch((err: unknown) => {
-    log.warn({ err }, "[report] expired-job cleanup failed");
-  });
 
   const result = await createReportJobIfAllowed(user.id, limits, platformsParam);
   if (!result.ok) {

@@ -30,6 +30,33 @@
   --color-danger: #c4271c;
   --color-danger-surface: #fdeceb;
 
+  /* Dark-theme values for the tokens above that actually change between themes — tints/shades of
+     the same hues, never a new color (see .claude/skills/design-system/SKILL.md's color rules).
+     Applied by the two blocks below `@theme inline` (system-preference default + explicit
+     override); kept as a single literal source here so those two blocks can't drift apart.
+     Intentionally NOT listed: the surface-tile/surface-black tokens, --color-body-on-dark,
+     --color-body-muted, --color-primary-on-dark, --color-on-primary — those back the nav bar and the
+     permanently-dark Hero/ReportSection/HowItWorks tiles, which stay dark in both themes. */
+  --dark-color-primary: #2997ff;
+  --dark-color-primary-focus: #409cff;
+  --dark-color-canvas: #000000;
+  --dark-color-canvas-parchment: #1c1c1e;
+  --dark-color-surface-pearl: #17171a;
+  --dark-color-chip-translucent-64: rgba(72, 72, 74, 0.64);
+  --dark-color-ink: #f5f5f7;
+  --dark-color-body: #f5f5f7;
+  --dark-color-ink-muted-80: #e5e5e7;
+  --dark-color-ink-muted-48: #98989d;
+  --dark-color-divider-soft: #2c2c2e;
+  --dark-color-hairline: #38383a;
+  --dark-color-hairline-alpha: rgba(255, 255, 255, 0.12);
+  --dark-color-verified: #30d158;
+  --dark-color-verified-surface: rgba(48, 209, 88, 0.16);
+  --dark-color-pending: #ffd60a;
+  --dark-color-pending-surface: rgba(255, 214, 10, 0.16);
+  --dark-color-danger: #ff453a;
+  --dark-color-danger-surface: rgba(255, 69, 58, 0.16);
+
   /* Typography */
   --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display",
     var(--font-inter), system-ui, sans-serif;
@@ -174,6 +201,59 @@
   --ease-in-out: var(--ease-in-out);
 
   --shadow-product: var(--shadow-product);
+}
+
+/* Dark theme: reassigns the theme-able tokens above to their --dark-color-* values (defined once
+   in :root, see the comment there). Two application paths, kept in sync since both just read the
+   same literals:
+   - No stored preference → follow the OS via `prefers-color-scheme`, unless the user has
+     explicitly forced light (`data-theme="light"` overrides even a dark system).
+   - An explicit stored preference (see lib/theme.ts) → `data-theme="dark"` applies regardless of
+     the system setting. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --color-primary: var(--dark-color-primary);
+    --color-primary-focus: var(--dark-color-primary-focus);
+    --color-canvas: var(--dark-color-canvas);
+    --color-canvas-parchment: var(--dark-color-canvas-parchment);
+    --color-surface-pearl: var(--dark-color-surface-pearl);
+    --color-chip-translucent-64: var(--dark-color-chip-translucent-64);
+    --color-ink: var(--dark-color-ink);
+    --color-body: var(--dark-color-body);
+    --color-ink-muted-80: var(--dark-color-ink-muted-80);
+    --color-ink-muted-48: var(--dark-color-ink-muted-48);
+    --color-divider-soft: var(--dark-color-divider-soft);
+    --color-hairline: var(--dark-color-hairline);
+    --color-hairline-alpha: var(--dark-color-hairline-alpha);
+    --color-verified: var(--dark-color-verified);
+    --color-verified-surface: var(--dark-color-verified-surface);
+    --color-pending: var(--dark-color-pending);
+    --color-pending-surface: var(--dark-color-pending-surface);
+    --color-danger: var(--dark-color-danger);
+    --color-danger-surface: var(--dark-color-danger-surface);
+  }
+}
+
+:root[data-theme="dark"] {
+  --color-primary: var(--dark-color-primary);
+  --color-primary-focus: var(--dark-color-primary-focus);
+  --color-canvas: var(--dark-color-canvas);
+  --color-canvas-parchment: var(--dark-color-canvas-parchment);
+  --color-surface-pearl: var(--dark-color-surface-pearl);
+  --color-chip-translucent-64: var(--dark-color-chip-translucent-64);
+  --color-ink: var(--dark-color-ink);
+  --color-body: var(--dark-color-body);
+  --color-ink-muted-80: var(--dark-color-ink-muted-80);
+  --color-ink-muted-48: var(--dark-color-ink-muted-48);
+  --color-divider-soft: var(--dark-color-divider-soft);
+  --color-hairline: var(--dark-color-hairline);
+  --color-hairline-alpha: var(--dark-color-hairline-alpha);
+  --color-verified: var(--dark-color-verified);
+  --color-verified-surface: var(--dark-color-verified-surface);
+  --color-pending: var(--dark-color-pending);
+  --color-pending-surface: var(--dark-color-pending-surface);
+  --color-danger: var(--dark-color-danger);
+  --color-danger-surface: var(--dark-color-danger-surface);
 }
 
 body {

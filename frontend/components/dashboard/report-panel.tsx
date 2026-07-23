@@ -12,7 +12,8 @@ import type { ReportHistoryEntry } from "@/lib/report-jobs";
 
 type ReportPanelProps = {
   hasConnections: boolean;
-  /** Metadata-only history — survives PDF expiry (see lib/report-jobs.tsx). */
+  /** Past report jobs — a READY entry's PDF stays downloadable indefinitely (see
+   * lib/report-jobs.tsx / the ReportJob model's comment in schema.prisma). */
   history: ReportHistoryEntry[];
   /** Non-null while the plan's validity-window wait blocks a new report; see
    * lib/report-jobs.tsx's getNextReportAvailableAt. Null on Enterprise (no wait) or once the
@@ -36,16 +37,18 @@ function platformsLabel(platformsParam: string | null): string {
 function statusLabel(entry: ReportHistoryEntry): string {
   if (entry.status === "PENDING" || entry.status === "PROCESSING") return "Generating…";
   if (entry.status === "FAILED") return "Failed";
-  return entry.isExpired ? "Expired" : "Ready";
+  return "Ready";
 }
 
 /**
- * "Download report" starts an async report job and downloads it once ready (see
+ * "Download report" starts a *new* async report job and downloads it once ready (see
  * hooks/use-report-download.ts — app/api/report/route.tsx no longer renders synchronously, so
  * this can no longer be a plain `<a href>` navigation like it used to be) with every connected
  * platform included. The second link sends users to /dashboard/report to pick a subset of
  * platforms before generating. Below that, a metadata-only history list (see
- * lib/report-jobs.tsx's getReportHistory) shows past jobs even after their PDF has expired.
+ * lib/report-jobs.tsx's getReportHistory) shows past jobs — a READY entry's PDF is kept
+ * indefinitely, so its download link can be a plain `<a href>` straight at
+ * GET /api/report/[jobId] (already-rendered bytes, no job to poll).
  */
 export function ReportPanel({ hasConnections, history, nextReportAvailableAt, reportValidityDays }: ReportPanelProps) {
   const router = useRouter();
@@ -116,23 +119,35 @@ export function ReportPanel({ hasConnections, history, nextReportAvailableAt, re
                   <p className="mt-0.5 truncate text-(length:--type-fine-print-size) text-ink-muted-48">
                     {platformsLabel(entry.platformsParam)}
                   </p>
-                  {entry.validUntil && !entry.isExpired ? (
+                  {entry.validUntil ? (
                     <p className="mt-0.5 text-(length:--type-fine-print-size) text-ink-muted-48">
-                      Valid until {DATE_FORMAT.format(entry.validUntil)}
+                      Report data valid until {DATE_FORMAT.format(entry.validUntil)}
                     </p>
                   ) : null}
                 </div>
-                <span
-                  className={cn(
-                    "shrink-0 text-(length:--type-fine-print-size) font-semibold",
-                    entry.status === "READY" && !entry.isExpired && "text-verified",
-                    entry.status === "FAILED" && "text-danger",
-                    (entry.status === "PENDING" || entry.status === "PROCESSING" || entry.isExpired) &&
-                      "text-ink-muted-48",
-                  )}
-                >
-                  {statusLabel(entry)}
-                </span>
+                <div className="flex shrink-0 flex-col items-end gap-1">
+                  <span
+                    className={cn(
+                      "text-(length:--type-fine-print-size) font-semibold",
+                      entry.status === "READY" && "text-verified",
+                      entry.status === "FAILED" && "text-danger",
+                      (entry.status === "PENDING" || entry.status === "PROCESSING") && "text-ink-muted-48",
+                    )}
+                  >
+                    {statusLabel(entry)}
+                  </span>
+                  {entry.status === "READY" ? (
+                    <a
+                      href={`/api/report/${entry.id}`}
+                      className={cn(
+                        "text-(length:--type-fine-print-size) font-semibold text-primary",
+                        "hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-focus",
+                      )}
+                    >
+                      Download
+                    </a>
+                  ) : null}
+                </div>
               </li>
             ))}
           </ul>
