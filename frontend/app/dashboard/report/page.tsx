@@ -4,6 +4,9 @@ import { redirect } from "next/navigation";
 import { ReportBuilder } from "@/components/dashboard/report-builder";
 import { findPlatformBySlug } from "@/components/landing/platform-data";
 import { getUserConnections } from "@/lib/dashboard-data";
+import { getNextReportAvailableAt } from "@/lib/report-jobs";
+import { resolveUserPlan } from "@/lib/plan-resolution";
+import { PLAN_LIMITS } from "@/lib/plan-limits";
 import { cn } from "@/lib/cn";
 
 export default async function ReportPage() {
@@ -19,6 +22,9 @@ export default async function ReportPage() {
       amount: connection.verifiedAmount,
     }))
     .sort((a, b) => b.amount - a.amount);
+
+  const plan = await resolveUserPlan(user.id);
+  const nextReportAvailableAt = await getNextReportAvailableAt(user.id);
 
   return (
     <main className="min-h-screen bg-canvas-parchment px-6 py-16">
@@ -43,7 +49,11 @@ export default async function ReportPage() {
         </div>
 
         <div className="mt-10">
-          <ReportBuilder sources={sources} />
+          <ReportBuilder
+            sources={sources}
+            reportValidityDays={PLAN_LIMITS[plan].reportValidityDays}
+            nextReportAvailableAt={nextReportAvailableAt}
+          />
         </div>
       </div>
     </main>

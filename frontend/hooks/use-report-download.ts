@@ -1,10 +1,10 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
+import { isErrorEnvelope } from "@/lib/error-envelope";
 
 export type ReportDownloadStatus = "idle" | "generating" | "error";
 
-type ErrorEnvelope = { error: { code: string; message: string } };
 type CreateJobBody = { data: { jobId: string } };
 
 // Report rendering is fast in practice (a text/table PDF, no images — see lib/report-jobs.tsx),
@@ -12,10 +12,6 @@ type CreateJobBody = { data: { jobId: string } };
 // message instead of spinning forever.
 const POLL_INTERVAL_MS = 1000;
 const MAX_POLLS = 120;
-
-function isErrorEnvelope(value: unknown): value is ErrorEnvelope {
-  return typeof value === "object" && value !== null && "error" in value;
-}
 
 function retryAfterMessage(response: Response): string {
   const retryAfter = response.headers.get("Retry-After");
@@ -55,7 +51,7 @@ export function useReportDownload() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const inFlight = useRef(false);
 
-  const download = useCallback(async (platformsParam?: string) => {
+  const download = useCallback(async (platformsParam?: string, onSuccess?: () => void) => {
     if (inFlight.current) return;
     inFlight.current = true;
     setStatus("generating");
@@ -98,6 +94,7 @@ export function useReportDownload() {
           const blob = await pollResponse.blob();
           triggerBlobDownload(blob, filenameFromContentDisposition(pollResponse.headers.get("Content-Disposition")));
           setStatus("idle");
+          onSuccess?.();
           return;
         }
 

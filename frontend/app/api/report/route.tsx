@@ -6,7 +6,9 @@ import { ApiError } from "@/lib/api-error";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { getUserConnections } from "@/lib/dashboard-data";
 import { db } from "@/lib/db";
-import { createReportJob, deleteExpiredReportJobs, filterConnections, runReportJob } from "@/lib/report-jobs";
+import { clearExpiredReportJobPayloads, createReportJobIfAllowed, filterConnections, runReportJob } from "@/lib/report-jobs";
+import { resolveUserPlan } from "@/lib/plan-resolution";
+import { PLAN_LIMITS } from "@/lib/plan-limits";
 import { loggerFor } from "@/lib/logger";
 
 // Prisma's pg driver adapter needs Node APIs (net/tls) — this route can never run on the Edge
@@ -56,15 +58,24 @@ export async function POST(request: NextRequest) {
   // PlatformConnection row exists, and that FKs to User.id (see app/connect/[slug]/callback).
   const user = await db.user.findUniqueOrThrow({ where: { clerkId: clerkUser.id }, select: { id: true } });
 
-  await deleteExpiredReportJobs(user.id).catch((err: unknown) => {
+  const plan = await resolveUserPlan(clerkUser.id);
+  const limits = PLAN_LIMITS[plan];
+
+  await clearExpiredReportJobPayloads(user.id).catch((err: unknown) => {
     log.warn({ err }, "[report] expired-job cleanup failed");
   });
 
-  const job = await createReportJob(user.id, platformsParam);
+  const result = await createReportJobIfAllowed(user.id, limits, platformsParam);
+  if (!result.ok) {
+    return ApiError.conflict(
+      "REPORT_LIMIT_REACHED",
+      `Your current report is valid until ${result.validUntil.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}. Upgrade your plan to generate reports more often.`,
+    );
+  }
 
-  after(() => runReportJob(job.id, clerkUser, platformsParam));
+  after(() => runReportJob(result.jobId, clerkUser, platformsParam));
 
-  log.info({ jobId: job.id }, "[report] job created");
+  log.info({ jobId: result.jobId }, "[report] job created");
 
-  return NextResponse.json({ data: { jobId: job.id } }, { status: 202 });
+  return NextResponse.json({ data: { jobId: result.jobId } }, { status: 202 });
 }

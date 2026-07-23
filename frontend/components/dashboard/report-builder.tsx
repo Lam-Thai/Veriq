@@ -2,12 +2,15 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { PillButton } from "@/components/ui/pill-button";
 import { cn } from "@/lib/cn";
 import { useReportDownload } from "@/hooks/use-report-download";
+import { computeAverageMonthly } from "@/lib/income-math";
 
 const CURRENCY = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
+const DATE_FORMAT = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" });
 
 export type ReportSource = {
   slug: string;
@@ -17,6 +20,10 @@ export type ReportSource = {
 
 type ReportBuilderProps = {
   sources: ReportSource[];
+  reportValidityDays: number;
+  /** Non-null while the plan's validity-window wait blocks a new report — see
+   * lib/report-jobs.tsx's getNextReportAvailableAt. */
+  nextReportAvailableAt: Date | null;
 };
 
 /**
@@ -26,10 +33,12 @@ type ReportBuilderProps = {
  * resulting job, and triggers the blob download once it's ready — report-panel.tsx uses the same
  * hook for its all-platforms download.
  */
-export function ReportBuilder({ sources }: ReportBuilderProps) {
+export function ReportBuilder({ sources, reportValidityDays, nextReportAvailableAt }: ReportBuilderProps) {
+  const router = useRouter();
   const [selected, setSelected] = useState<Set<string>>(() => new Set(sources.map((source) => source.slug)));
   const { status, errorMessage, download } = useReportDownload();
   const isGenerating = status === "generating";
+  const isBlockedByValidity = nextReportAvailableAt !== null && nextReportAvailableAt > new Date();
 
   if (sources.length === 0) {
     return (
@@ -64,16 +73,32 @@ export function ReportBuilder({ sources }: ReportBuilderProps) {
   const selectedTotal = sources
     .filter((source) => selected.has(source.slug))
     .reduce((sum, source) => sum + source.amount, 0);
+  // Average monthly amount across the selected sources over the same 6-month window the
+  // Overview tab's "Average monthly" tile uses (see lib/income-math.ts) — an informational
+  // reference figure only, never a credit score, approval, or lending decision.
+  const estimatedQualifyingIncome = computeAverageMonthly(selectedTotal);
 
   const platformsParam = Array.from(selected).join(",");
 
   return (
     <div className="mx-auto max-w-2xl">
       <Card>
-        <p className="text-(length:--type-fine-print-size) text-ink-muted-48">Selected total</p>
-        <p className="mt-1 text-3xl font-semibold text-ink">{CURRENCY.format(selectedTotal)}</p>
+        <div className="flex flex-wrap gap-8">
+          <div>
+            <p className="text-(length:--type-fine-print-size) text-ink-muted-48">Selected total</p>
+            <p className="mt-1 text-3xl font-semibold text-ink">{CURRENCY.format(selectedTotal)}</p>
+          </div>
+          <div>
+            <p className="text-(length:--type-fine-print-size) text-ink-muted-48">Estimated qualifying income</p>
+            <p className="mt-1 text-3xl font-semibold text-ink">{CURRENCY.format(estimatedQualifyingIncome)}</p>
+          </div>
+        </div>
         <p className="mt-1 text-(length:--type-fine-print-size) text-verified">
           {selected.size} of {sources.length} {sources.length === 1 ? "source" : "sources"} included
+        </p>
+        <p className="mt-3 text-(length:--type-fine-print-size) text-ink-muted-48">
+          Estimated qualifying income is the average monthly amount across your selected sources, for your own
+          reference. It is not a credit score, an approval, or a lending decision.
         </p>
       </Card>
 
@@ -114,12 +139,24 @@ export function ReportBuilder({ sources }: ReportBuilderProps) {
 
       <div className="mt-8 flex flex-col items-center gap-3">
         {selected.size > 0 ? (
-          <PillButton type="button" onClick={() => void download(platformsParam)} disabled={isGenerating}>
+          <PillButton
+            type="button"
+            onClick={() => void download(platformsParam, () => router.refresh())}
+            disabled={isGenerating || isBlockedByValidity}
+          >
             {isGenerating ? "Generating…" : "Download report PDF"}
           </PillButton>
         ) : (
           <PillButton disabled>Select at least one platform</PillButton>
         )}
+        <p className="text-(length:--type-fine-print-size) text-ink-muted-48">
+          Reports on your plan stay valid for {reportValidityDays} days.
+        </p>
+        {isBlockedByValidity && nextReportAvailableAt ? (
+          <p className="text-(length:--type-fine-print-size) text-ink-muted-48">
+            Your next report can be generated on {DATE_FORMAT.format(nextReportAvailableAt)}.
+          </p>
+        ) : null}
         {status === "error" && errorMessage ? (
           <p role="alert" className="text-(length:--type-fine-print-size) text-danger">
             {errorMessage}

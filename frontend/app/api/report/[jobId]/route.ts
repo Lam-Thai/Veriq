@@ -38,7 +38,7 @@ export async function GET(_request: Request, ctx: RouteContext<"/api/report/[job
 
   const job = await db.reportJob.findFirst({
     where: { id: jobId, user: { clerkId: clerkUser.id } },
-    select: { status: true, pdfData: true, filename: true },
+    select: { status: true, pdfData: true, filename: true, expiresAt: true },
   });
   if (!job) return ApiError.notFound();
 
@@ -51,7 +51,13 @@ export async function GET(_request: Request, ctx: RouteContext<"/api/report/[job
     return ApiError.internal();
   }
 
-  // READY
+  // READY. Expiry is checked by timestamp rather than trusting pdfData's presence alone — a
+  // legitimately expired job (see lib/report-jobs.tsx's clearExpiredReportJobPayloads) is an
+  // expected state, not the "marked READY but missing bytes" bug case below.
+  if (job.expiresAt < new Date()) {
+    return ApiError.conflict("REPORT_EXPIRED", "This report has expired — generate a new one to download it again.");
+  }
+
   if (!job.pdfData || !job.filename) {
     log.error({ jobId }, "[report] job marked READY but missing pdfData/filename");
     return ApiError.internal();
