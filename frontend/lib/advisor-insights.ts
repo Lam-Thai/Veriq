@@ -1,4 +1,5 @@
 import type { DashboardStats, MonthlyAmount, UserConnection } from "@/lib/dashboard-data";
+import { coefficientOfVariation } from "@/lib/income-math";
 import { findPlatformBySlug } from "@/components/landing/platform-data";
 
 // Deterministic, rule-based counterpart to lib/prompts/income-narrative.ts — same descriptive
@@ -39,14 +40,6 @@ function formatPercent(value: number): string {
 
 function platformName(slug: string): string {
   return findPlatformBySlug(slug)?.name ?? slug;
-}
-
-function coefficientOfVariation(amounts: number[]): number {
-  if (amounts.length === 0) return 0;
-  const mean = amounts.reduce((sum, value) => sum + value, 0) / amounts.length;
-  if (mean <= 0) return 0;
-  const variance = amounts.reduce((sum, value) => sum + (value - mean) ** 2, 0) / amounts.length;
-  return Math.sqrt(variance) / mean;
 }
 
 const STABILITY_LEVELS: AdvisorStabilityRating[] = ["stable", "moderate", "variable"];

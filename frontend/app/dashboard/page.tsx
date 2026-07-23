@@ -3,8 +3,17 @@ import { UserProfile } from "@clerk/nextjs";
 import { currentUser } from "@clerk/nextjs/server";
 import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 import { OverviewPanel } from "@/components/dashboard/overview-panel";
+import { CalculatorsPanel } from "@/components/dashboard/calculators-panel";
 import { ReportPanel } from "@/components/dashboard/report-panel";
 import { getUserConnections, computeDashboardStats } from "@/lib/dashboard-data";
+import {
+  getInternalUserId,
+  getLastReportValidUntil,
+  getReportHistoryForUser,
+  type ReportHistoryEntry,
+} from "@/lib/report-jobs";
+import { resolveUserPlan } from "@/lib/plan-resolution";
+import { PLAN_LIMITS } from "@/lib/plan-limits";
 
 export default async function DashboardPage() {
   const user = await currentUser();
@@ -17,6 +26,16 @@ export default async function DashboardPage() {
   const stats = computeDashboardStats(connections);
   const connectedSlugs = connections.map((connection) => connection.slug);
 
+  const plan = await resolveUserPlan(user.id);
+  const limits = PLAN_LIMITS[plan];
+  const internalUserId = await getInternalUserId(user.id);
+  const [reportHistory, nextReportAvailableAt]: [ReportHistoryEntry[], Date | null] = internalUserId
+    ? await Promise.all([
+        getReportHistoryForUser(internalUserId, limits.reportValidityDays),
+        getLastReportValidUntil(internalUserId, limits),
+      ])
+    : [[], null];
+
   return (
     <main className="min-h-screen bg-gradient-flow-light px-6 py-16">
       <div className="mx-auto max-w-grid text-center">
@@ -27,8 +46,23 @@ export default async function DashboardPage() {
 
       <div className="mt-10">
         <DashboardShell
-          overview={<OverviewPanel stats={stats} connections={connections} connectedSlugs={connectedSlugs} />}
-          report={<ReportPanel hasConnections={connections.length > 0} />}
+          overview={
+            <OverviewPanel
+              stats={stats}
+              connections={connections}
+              connectedSlugs={connectedSlugs}
+              maxPlatforms={limits.maxPlatforms}
+            />
+          }
+          calculators={<CalculatorsPanel stats={stats} connections={connections} />}
+          report={
+            <ReportPanel
+              hasConnections={connections.length > 0}
+              history={reportHistory}
+              nextReportAvailableAt={nextReportAvailableAt}
+              reportValidityDays={limits.reportValidityDays}
+            />
+          }
           account={
             <div className="flex justify-center">
               <UserProfile routing="hash" />

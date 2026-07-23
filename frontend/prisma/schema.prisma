@@ -109,9 +109,11 @@ enum ReportJobStatus {
 // app/api/report/[jobId]/route.ts polls it. `pdfData` is stored inline (Postgres bytea) rather
 // than in object storage: report sizes here are small (a text/table PDF, no images) and this
 // avoids adding a new storage dependency for a foundational-scale fix — revisit if report
-// size/volume ever makes that impractical. `expiresAt` rows are opportunistically deleted by the
-// next job creation for the same user (see lib/report-jobs.ts) rather than a cron job, the same
-// "cheap inline cleanup, no scheduler" precedent lib/rate-limit.ts already uses.
+// size/volume ever makes that impractical. The row (and its `pdfData`) is kept permanently — a
+// READY job's PDF is re-downloadable indefinitely from the dashboard's Report history, a
+// deliberate reversal of this model's earlier short-TTL-then-clear-bytes lifecycle. Revisit
+// (e.g. move `pdfData` to object storage) if report volume ever makes indefinite inline retention
+// impractical.
 model ReportJob {
   id             String          @id @default(cuid())
   userId         String
@@ -125,7 +127,10 @@ model ReportJob {
   error          String?
   createdAt      DateTime        @default(now()) @db.Timestamptz(3)
   updatedAt      DateTime        @updatedAt @db.Timestamptz(3)
-  expiresAt      DateTime        @db.Timestamptz(3)
 
-  @@index([userId])
+  // Covers both getLastReportValidUntil/createReportJobIfAllowed's
+  // { userId, status: {in:[...]} } filter and getReportHistory's { userId } lookup, both ordered
+  // by createdAt desc — an index-only scan instead of a post-scan sort on two hot paths (report
+  // creation gate + every dashboard load).
+  @@index([userId, status, createdAt(sort: Desc)])
 }

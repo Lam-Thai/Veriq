@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { PillButton } from "@/components/ui/pill-button";
 import { CONNECT_MESSAGE_TYPE, type ConnectDecision, type ConnectResult } from "@/lib/connect-flow";
+import { isErrorEnvelope } from "@/lib/error-envelope";
 
 type ConsentActionsProps = {
   slug: string;
@@ -24,6 +25,7 @@ type CallbackResponseBody = {
  */
 export function ConsentActions({ slug, state }: ConsentActionsProps) {
   const [status, setStatus] = useState<"idle" | "submitting" | "error">("idle");
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   async function handleDecision(decision: ConnectDecision) {
     setStatus("submitting");
@@ -36,6 +38,11 @@ export function ConsentActions({ slug, state }: ConsentActionsProps) {
         body: JSON.stringify({ state, decision }),
       });
       if (!response.ok) {
+        // A plan-limit block (see app/connect/[slug]/callback/route.ts) returns a real
+        // { error: { message } } envelope worth showing verbatim — fall back to a generic
+        // message only for genuinely unexpected failures.
+        const errorBody: unknown = await response.json().catch(() => null);
+        setErrorMessage(isErrorEnvelope(errorBody) ? errorBody.error.message : null);
         setStatus("error");
         return;
       }
@@ -81,7 +88,7 @@ export function ConsentActions({ slug, state }: ConsentActionsProps) {
 
       {status === "error" ? (
         <p role="alert" className="text-(length:--type-caption-size) text-danger">
-          Something went wrong. Close this window and try connecting again.
+          {errorMessage ?? "Something went wrong. Close this window and try connecting again."}
         </p>
       ) : null}
     </div>

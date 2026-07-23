@@ -10,14 +10,16 @@ type OverviewPanelProps = {
   stats: DashboardStats;
   connections: UserConnection[];
   connectedSlugs: string[];
+  /** null = unlimited (Pro/Enterprise). See lib/plan-limits.ts. */
+  maxPlatforms: number | null;
 };
 
-export function OverviewPanel({ stats, connections, connectedSlugs }: OverviewPanelProps) {
+export function OverviewPanel({ stats, connections, connectedSlugs, maxPlatforms }: OverviewPanelProps) {
   const bars = toBarHeights(stats.monthlyBreakdown);
 
   return (
     <div>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <Card>
           <p className="text-(length:--type-fine-print-size) text-ink-muted-48">Verified · 6 mo</p>
           <p className="mt-1 text-2xl font-semibold text-ink">
@@ -31,6 +33,12 @@ export function OverviewPanel({ stats, connections, connectedSlugs }: OverviewPa
           <p className="text-(length:--type-fine-print-size) text-ink-muted-48">This month</p>
           <p className="mt-1 text-2xl font-semibold text-ink">
             <AnimatedNumber value={stats.thisMonth} />
+          </p>
+        </Card>
+        <Card>
+          <p className="text-(length:--type-fine-print-size) text-ink-muted-48">Average monthly</p>
+          <p className="mt-1 text-2xl font-semibold text-ink">
+            <AnimatedNumber value={stats.averageMonthly} />
           </p>
         </Card>
       </div>
@@ -54,7 +62,12 @@ export function OverviewPanel({ stats, connections, connectedSlugs }: OverviewPa
       <div className="mt-10">
         <p className="text-(length:--type-caption-size) font-semibold text-ink">Connected platforms</p>
         <div className="mt-4">
-          <ConnectionsPanel initialConnectedSlugs={connectedSlugs} />
+          <ConnectionsPanel
+            initialConnectedSlugs={connectedSlugs}
+            connections={connections}
+            totalVerified={stats.totalVerified}
+            maxPlatforms={maxPlatforms}
+          />
         </div>
       </div>
     </div>

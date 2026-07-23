@@ -8,6 +8,8 @@ import { ApiError } from "@/lib/api-error";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { loggerFor } from "@/lib/logger";
 import { db } from "@/lib/db";
+import { resolveUserPlan } from "@/lib/plan-resolution";
+import { PLAN_LIMITS } from "@/lib/plan-limits";
 
 // Same window/limit as the authorize route this pairs with — see that file's comment.
 const RATE_LIMIT = 20;
@@ -21,6 +23,14 @@ function timingSafeEqualStrings(a: string, b: string): boolean {
   const digestA = createHash("sha256").update(a).digest();
   const digestB = createHash("sha256").update(b).digest();
   return timingSafeEqual(digestA, digestB);
+}
+
+// Thrown inside the $transaction below to carry the cap out to the catch block — a
+// NextResponse can't be returned from inside a transaction callback.
+class PlatformLimitReachedError extends Error {
+  constructor(public readonly maxPlatforms: number) {
+    super("platform_limit_reached");
+  }
 }
 
 /**
@@ -80,14 +90,50 @@ export async function POST(request: Request, ctx: RouteContext<"/connect/[slug]/
         select: { id: true },
       });
 
-      // Upsert, not create — reconnecting an already-connected platform updates the snapshot
-      // instead of erroring or creating a duplicate row.
-      await db.platformConnection.upsert({
-        where: { userId_slug: { userId: user.id, slug } },
-        create: { userId: user.id, slug, verifiedAmount: platform.verifiedAmount },
-        update: { verifiedAmount: platform.verifiedAmount },
+      const plan = await resolveUserPlan(clerkUser.id);
+      const { maxPlatforms } = PLAN_LIMITS[plan];
+
+      // Count-then-upsert is a check-then-act on the same user's connection count, so it has to
+      // run under a lock — otherwise two concurrent callbacks for two *different* new platforms
+      // can both read a count under the cap before either upsert commits, landing the user over
+      // their plan's limit. A transaction-scoped advisory lock keyed on the user id serializes
+      // concurrent callbacks for that user; it auto-releases at commit/rollback, which is safe
+      // with the pooled (PgBouncer) connection lib/db.ts uses — a session-level advisory lock
+      // would not be.
+      await db.$transaction(async (tx) => {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${user.id}))`;
+
+        // Reconnecting an already-connected platform never counts against the cap — only a
+        // genuinely new connection can push the user over their plan's limit. Re-checked here
+        // (inside the lock) rather than trusting a pre-transaction read, since another connect
+        // for this same slug could have committed while this request was waiting on the lock.
+        const alreadyConnected = await tx.platformConnection.findUnique({
+          where: { userId_slug: { userId: user.id, slug } },
+          select: { id: true },
+        });
+
+        if (!alreadyConnected && maxPlatforms !== null) {
+          const connectedCount = await tx.platformConnection.count({ where: { userId: user.id } });
+          if (connectedCount >= maxPlatforms) {
+            throw new PlatformLimitReachedError(maxPlatforms);
+          }
+        }
+
+        // Upsert, not create — reconnecting an already-connected platform updates the snapshot
+        // instead of erroring or creating a duplicate row.
+        await tx.platformConnection.upsert({
+          where: { userId_slug: { userId: user.id, slug } },
+          create: { userId: user.id, slug, verifiedAmount: platform.verifiedAmount },
+          update: { verifiedAmount: platform.verifiedAmount },
+        });
       });
     } catch (err) {
+      if (err instanceof PlatformLimitReachedError) {
+        return ApiError.conflict(
+          "PLATFORM_LIMIT_REACHED",
+          `Your plan allows up to ${err.maxPlatforms} connected platform${err.maxPlatforms === 1 ? "" : "s"}. Disconnect one or upgrade your plan to connect more.`,
+        );
+      }
       log.error({ err, clerkId: clerkUser.id, slug }, "[connect callback] failed to persist connection");
       return ApiError.internal();
     }

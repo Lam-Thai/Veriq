@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Show, UserButton } from "@clerk/nextjs";
 import { BrandLogo } from "@/components/ui/brand-logo";
 import { PillButton } from "@/components/ui/pill-button";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { NAV_LINKS } from "@/components/landing/nav-links";
 import { MobileNavMenu } from "@/components/landing/mobile-nav-menu";
 import { cn } from "@/lib/cn";
@@ -37,6 +38,7 @@ export function Nav() {
         </ul>
 
         <div className="hidden items-center gap-4 md:flex">
+          <ThemeToggle />
           <Show when="signed-out" fallback={<UserButton />}>
             <Link
               href="/sign-in"

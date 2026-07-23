@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Show, UserButton } from "@clerk/nextjs";
 import { cn } from "@/lib/cn";
 import { CloseIcon, MenuIcon } from "@/components/ui/icons";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { NAV_LINKS } from "@/components/landing/nav-links";
 
 /**
@@ -83,6 +84,10 @@ export function MobileNavMenu() {
                   Sign in
                 </Link>
               </Show>
+            </li>
+            <li className="flex items-center justify-between px-2 py-2.5">
+              <span className="text-(length:--type-button-utility-size) font-normal text-white/80">Appearance</span>
+              <ThemeToggle />
             </li>
           </ul>
         </div>
