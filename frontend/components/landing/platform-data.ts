@@ -29,6 +29,9 @@ export const PLATFORMS: Platform[] = [
   { slug: "paypal", name: "PayPal", category: "Payments", status: "available", verifiedAmount: 4280 },
   { slug: "stripe", name: "Stripe", category: "Payments", status: "connected", verifiedAmount: 18420 },
   { slug: "venmo", name: "Venmo", category: "Payments", status: "available", verifiedAmount: 0 },
+  { slug: "instagram", name: "Instagram", category: "Creator", status: "available", verifiedAmount: 0 },
+  { slug: "tiktok", name: "TikTok", category: "Creator", status: "available", verifiedAmount: 0 },
+  { slug: "facebook", name: "Facebook", category: "Creator", status: "available", verifiedAmount: 0 },
 ];
 
 export function findPlatformBySlug(slug: string): Platform | undefined {

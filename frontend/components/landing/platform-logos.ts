@@ -1,11 +1,14 @@
 import {
   siAirbnb,
   siDoordash,
+  siFacebook,
   siFiverr,
   siInstacart,
+  siInstagram,
   siLyft,
   siPaypal,
   siStripe,
+  siTiktok,
   siUber,
   siUpwork,
   siVenmo,
@@ -30,4 +33,7 @@ export const PLATFORM_LOGOS: Record<string, PlatformLogo> = {
   paypal: siPaypal,
   stripe: siStripe,
   venmo: siVenmo,
+  instagram: siInstagram,
+  tiktok: siTiktok,
+  facebook: siFacebook,
 };
