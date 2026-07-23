@@ -3,6 +3,7 @@ import { UserProfile } from "@clerk/nextjs";
 import { currentUser } from "@clerk/nextjs/server";
 import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 import { OverviewPanel } from "@/components/dashboard/overview-panel";
+import { CalculatorsPanel } from "@/components/dashboard/calculators-panel";
 import { ReportPanel } from "@/components/dashboard/report-panel";
 import { getUserConnections, computeDashboardStats } from "@/lib/dashboard-data";
 import {
@@ -53,6 +54,7 @@ export default async function DashboardPage() {
               maxPlatforms={limits.maxPlatforms}
             />
           }
+          calculators={<CalculatorsPanel stats={stats} connections={connections} />}
           report={
             <ReportPanel
               hasConnections={connections.length > 0}

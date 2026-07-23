@@ -42,3 +42,49 @@ export function computeAverageMonthly(total: number): number {
   const distribution = distributeAcrossMonths(total);
   return distribution.reduce((sum, entry) => sum + entry.amount, 0) / distribution.length;
 }
+
+// Population coefficient of variation (standard deviation / mean) of a set of amounts. Returns 0
+// for an empty set or a non-positive mean so callers can treat "no signal" as "perfectly flat"
+// rather than dividing by zero. Shared by the advisor insights' stability *rating*
+// (lib/advisor-insights.ts) and the Calculators tab's stability *score* (lib/income-calculators.ts)
+// so both read variation the same way.
+export function coefficientOfVariation(amounts: number[]): number {
+  if (amounts.length === 0) return 0;
+  const mean = amounts.reduce((sum, value) => sum + value, 0) / amounts.length;
+  if (mean <= 0) return 0;
+  const variance = amounts.reduce((sum, value) => sum + (value - mean) ** 2, 0) / amounts.length;
+  return Math.sqrt(variance) / mean;
+}
+
+export type MonthlyGrowth = {
+  // Change from the second-to-last month to the last month, as a fraction (0.1 = +10%).
+  latestPct: number | null;
+  // Mean of every consecutive month-over-month change, as a fraction.
+  averagePct: number | null;
+};
+
+// Month-over-month growth of a monthly-income series. Both figures are null when they can't be
+// computed without dividing by a zero/absent prior month (e.g. a brand-new user whose months are
+// all $0). Because this app spreads each platform's total over one shared synthetic curve (see
+// distributeAcrossMonths — the app has no real per-transaction history), these describe that
+// curve's shape, the one temporal signal available, rather than independently varying user data.
+export function monthlyGrowth(monthlyBreakdown: MonthlyAmount[]): MonthlyGrowth {
+  const amounts = monthlyBreakdown.map((entry) => entry.amount);
+
+  const deltas: number[] = [];
+  for (let index = 1; index < amounts.length; index += 1) {
+    const previous = amounts[index - 1]!;
+    if (previous > 0) deltas.push((amounts[index]! - previous) / previous);
+  }
+
+  const previousMonth = amounts.at(-2);
+  const latestMonth = amounts.at(-1);
+  const latestPct =
+    previousMonth !== undefined && latestMonth !== undefined && previousMonth > 0
+      ? (latestMonth - previousMonth) / previousMonth
+      : null;
+
+  const averagePct = deltas.length > 0 ? deltas.reduce((sum, value) => sum + value, 0) / deltas.length : null;
+
+  return { latestPct, averagePct };
+}

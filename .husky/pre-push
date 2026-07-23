@@ -53,10 +53,15 @@ if ! run_checked "backend pytest" "$backend_dir" "$python_bin" -m pytest -q; the
   exit 1
 fi
 
-echo "pre-push: running frontend checks (lint, build)..."
+echo "pre-push: running frontend checks (lint, unit tests, build)..."
 
 if ! run_checked "frontend lint" "$frontend_dir" npm run lint; then
   echo "pre-push: frontend lint failed." >&2
+  exit 1
+fi
+
+if ! run_checked "frontend unit tests" "$frontend_dir" npm run test; then
+  echo "pre-push: frontend unit tests (vitest) failed." >&2
   exit 1
 fi
 
@@ -64,12 +69,5 @@ if ! run_checked "frontend build" "$frontend_dir" npm run build; then
   echo "pre-push: frontend build failed." >&2
   exit 1
 fi
-
-# A frontend unit-test runner (vitest/jest) isn't installed yet. Once
-# `frontend/package.json` gains a `test` script, add it here, e.g.:
-#   if ! (cd "$frontend_dir" && npm run test); then
-#     echo "pre-push: frontend unit tests failed." >&2
-#     exit 1
-#   fi
 
 echo "pre-push: all checks passed."
