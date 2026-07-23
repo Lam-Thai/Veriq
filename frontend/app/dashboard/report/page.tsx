@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { currentUser } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
-import { DashboardHeader } from "@/components/dashboard/dashboard-header";
 import { ReportBuilder } from "@/components/dashboard/report-builder";
 import { findPlatformBySlug } from "@/components/landing/platform-data";
 import { getUserConnections } from "@/lib/dashboard-data";
@@ -28,38 +27,35 @@ export default async function ReportPage() {
   const nextReportAvailableAt = await getNextReportAvailableAt(user.id);
 
   return (
-    <>
-      <DashboardHeader />
-      <main className="min-h-screen bg-canvas-parchment px-6 py-16">
-        <div className="mx-auto max-w-grid">
-          <Link
-            href="/dashboard"
-            className={cn(
-              "text-(length:--type-caption-size) font-semibold text-ink-muted-80",
-              "transition-colors duration-(--duration-fast) hover:text-ink",
-            )}
-          >
-            ← Back to dashboard
-          </Link>
+    <main className="min-h-screen bg-canvas-parchment px-6 py-16">
+      <div className="mx-auto max-w-grid">
+        <Link
+          href="/dashboard"
+          className={cn(
+            "text-(length:--type-caption-size) font-semibold text-ink-muted-80",
+            "transition-colors duration-(--duration-fast) hover:text-ink",
+          )}
+        >
+          ← Back to dashboard
+        </Link>
 
-          <div className="mt-4 text-center">
-            <h1 className="text-(length:--type-tagline-size)/(--type-tagline-lh) font-semibold text-ink">
-              Income report
-            </h1>
-            <p className="mt-2 text-(length:--type-body-size)/(--type-body-lh) text-ink-muted-80">
-              Choose which connected platforms to include, then download your lender-ready PDF.
-            </p>
-          </div>
-
-          <div className="mt-10">
-            <ReportBuilder
-              sources={sources}
-              reportValidityDays={PLAN_LIMITS[plan].reportValidityDays}
-              nextReportAvailableAt={nextReportAvailableAt}
-            />
-          </div>
+        <div className="mt-4 text-center">
+          <h1 className="text-(length:--type-tagline-size)/(--type-tagline-lh) font-semibold text-ink">
+            Income report
+          </h1>
+          <p className="mt-2 text-(length:--type-body-size)/(--type-body-lh) text-ink-muted-80">
+            Choose which connected platforms to include, then download your lender-ready PDF.
+          </p>
         </div>
-      </main>
-    </>
+
+        <div className="mt-10">
+          <ReportBuilder
+            sources={sources}
+            reportValidityDays={PLAN_LIMITS[plan].reportValidityDays}
+            nextReportAvailableAt={nextReportAvailableAt}
+          />
+        </div>
+      </div>
+    </main>
   );
 }
