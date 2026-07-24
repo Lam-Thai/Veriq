@@ -12,6 +12,25 @@ Writing unit tests, integration tests, or E2E tests for either runtime.
 
 ---
 
+## Repo Reality (read before copying any example below)
+The examples in this doc are the *target* patterns. What actually exists today:
+
+- **Unit tests are wired up.** `vitest` is installed; `frontend/vitest.config.ts` sets the node
+  environment, mirrors tsconfig's `@/` alias, and scopes collection to `*.test.ts(x)` (it excludes
+  `e2e/**` so it never grabs the Playwright `*.spec.ts` files). Run with `npm run test`
+  (`vitest run`) or `npm run test:watch`. `.husky/pre-push` runs `npm run test` before the build,
+  so a failing unit test blocks the push.
+- **Reference to copy:** `frontend/lib/income-calculators.test.ts` — colocated `*.test.ts`,
+  explicit `import { describe, it, expect } from "vitest"`, pure-function coverage with `@/` imports
+  and fixture factories. Prefer testing the pure lib layer (`lib/*`) directly.
+- **The integration-test harness does NOT exist yet.** `@/test/factories/*`, `@/test/helpers/client`,
+  and a dedicated test DB are illustrative only — do not import them until they're built. The same
+  goes for the Playwright login helper (`e2e/helpers/auth`): there is no Clerk test-session infra,
+  so current `e2e/*.spec.ts` only cover the unauthenticated boundary (e.g. `/dashboard` redirects to
+  sign-in). Building any of that harness is real setup work to plan, not a given.
+
+---
+
 ## Skills
 Consult these skills (`.claude/skills/<name>/SKILL.md`) before and while working:
 
@@ -75,6 +94,9 @@ describe('calculateTotal', () => {
 ```
 
 ## Next.js: Integration Test (API route)
+
+> Target pattern — the `@/test/*` factories/client and test DB it imports don't exist yet (see
+> Repo Reality). Build that harness first.
 
 ```ts
 // app/api/invoices/route.test.ts
@@ -182,6 +204,9 @@ async def test_missing_token_returns_401():
 ```
 
 ## E2E Test (Playwright — Next.js only)
+
+> Target pattern — `loginAs`/`e2e/helpers/auth` and Clerk test sessions don't exist yet (see Repo
+> Reality). Today's specs only cover the unauthenticated boundary.
 
 ```ts
 // e2e/invoice-creation.spec.ts
