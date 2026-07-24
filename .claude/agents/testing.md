@@ -13,6 +13,7 @@ Writing unit tests, integration tests, or E2E tests for either runtime.
 ---
 
 ## Repo Reality (read before copying any example below)
+
 The examples in this doc are the *target* patterns. What actually exists today:
 
 - **Unit tests are wired up.** `vitest` is installed; `frontend/vitest.config.ts` sets the node
