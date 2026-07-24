@@ -65,6 +65,9 @@ Before any agent's output is considered finished:
 - [ ] Naming is intention-revealing; no magic numbers
 - [ ] Functions are single-purpose; early-return over nesting
 - [ ] A new dev could onboard to this file in under a minute
+- [ ] Non-trivial pure/business logic has unit-test coverage and the suite passes — Next.js has a
+      `vitest` runner wired up (`npm run test`, enforced by `.husky/pre-push`); FastAPI uses
+      `pytest`. See the `testing` agent. (Trivial UI/wiring changes don't require new tests.)
 
 This skill doesn't replace the runtime-specific ones — it's the lens every agent checks its
 own output through before calling a task complete.
