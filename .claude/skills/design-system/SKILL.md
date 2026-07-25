@@ -33,23 +33,27 @@ If the same UI could ship in any SaaS product unchanged, it's not distinctive en
 ```
 
 ### Type Scale
+
+Role-based. Each role is three real custom properties — `-size` / `-lh` / `-ls`
+(size / line-height / letter-spacing), never a single slash-delimited value:
+
 ```css
-/* Role-based. Each role is THREE real tokens: --type-<role>-size / -lh / -ls
-   (size / line-height / letter-spacing). Shown here as size / lh / ls. */
---type-hero-display:   56px / 1.07 / -0.28px;   /* weight 600 */
---type-display-lg:     40px / 1.1  / 0;         /* weight 600 — section H2s */
---type-lead:           28px / 1.14 / 0.196px;   /* weight 400 */
---type-tagline:        21px / 1.19 / 0.231px;   /* weight 600 */
---type-body:           17px / 1.47 / -0.374px;  /* weight 400 — body copy */
---type-caption:        14px / 1.43 / -0.224px;
---type-button-large:   18px / 1    / 0;
---type-button-utility: 14px / 1.29 / -0.224px;
---type-fine-print:     12px / 1    / -0.12px;
---type-nav-link:       12px / 1    / -0.12px;
+--type-hero-display-size: 56px;    --type-hero-display-lh: 1.07;   --type-hero-display-ls: -0.28px;   /* weight 600 */
+--type-display-lg-size: 40px;      --type-display-lg-lh: 1.1;      --type-display-lg-ls: 0;           /* weight 600 — section H2s */
+--type-lead-size: 28px;            --type-lead-lh: 1.14;           --type-lead-ls: 0.196px;           /* weight 400 */
+--type-tagline-size: 21px;         --type-tagline-lh: 1.19;        --type-tagline-ls: 0.231px;        /* weight 600 */
+--type-body-size: 17px;            --type-body-lh: 1.47;           --type-body-ls: -0.374px;          /* weight 400 — body copy */
+--type-caption-size: 14px;         --type-caption-lh: 1.43;        --type-caption-ls: -0.224px;
+--type-button-large-size: 18px;    --type-button-large-lh: 1;      --type-button-large-ls: 0;
+--type-button-utility-size: 14px;  --type-button-utility-lh: 1.29; --type-button-utility-ls: -0.224px;
+--type-fine-print-size: 12px;      --type-fine-print-lh: 1;        --type-fine-print-ls: -0.12px;
+--type-nav-link-size: 12px;        --type-nav-link-lh: 1;          --type-nav-link-ls: -0.12px;
 ```
+
 Weights: 300 / 400 / 600 / 700 — never 500.
 
 ### Radius
+
 ```css
 --radius-none: 0px; --radius-xs: 5px;  --radius-sm: 8px;
 --radius-md: 11px;  --radius-lg: 18px; --radius-pill: 9999px;
