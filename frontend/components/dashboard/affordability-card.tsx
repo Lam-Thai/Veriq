@@ -2,10 +2,19 @@
 
 import { useState } from "react";
 import { Card } from "@/components/ui/card";
+import { Disclosure } from "@/components/ui/disclosure";
 import { HomeIcon } from "@/components/ui/icons";
 import { CalcField } from "@/components/dashboard/calc-field";
 import { formatPercent, formatUsd } from "@/components/dashboard/calc-format";
 import { computeAffordability, parseNonNegativeAmount, type DtiBand } from "@/lib/income-calculators";
+
+// Plain-language explanation of the DTI and rent figures. References the same rules of thumb the
+// card already displays (3× rent, ~36% DTI) and keeps its "not a lending decision" posture.
+const HOW_WE_CALCULATED =
+  "We compare the monthly debts you enter against your verified monthly income to work out your " +
+  "debt-to-income ratio. The rent figures come from two common rules of thumb — rent around three " +
+  "times your monthly income, and keeping housing plus debts within roughly a third of it. These are " +
+  "general guidelines for your own planning, not a pre-qualification, approval, or lending decision.";
 
 type AffordabilityCardProps = {
   /** Verified average monthly income used as the gross-income base for DTI. */
@@ -96,6 +105,8 @@ export function AffordabilityCard({ monthlyIncome }: AffordabilityCardProps) {
         <Figure label="Rent at 3× income" value={formatUsd(result.maxRentByIncomeRule)} />
         <Figure label="Housing to stay ≤ 36% DTI" value={formatUsd(result.maxHousingPaymentAtThreshold)} />
       </dl>
+
+      <Disclosure className="mt-5">{HOW_WE_CALCULATED}</Disclosure>
 
       <p className="mt-5 text-(length:--type-fine-print-size) text-ink-muted-48">
         These estimates use common rules of thumb for your own planning. They are not a

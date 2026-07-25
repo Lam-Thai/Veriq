@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Card } from "@/components/ui/card";
+import { Disclosure } from "@/components/ui/disclosure";
 import { DocumentIcon } from "@/components/ui/icons";
 import { CalcField } from "@/components/dashboard/calc-field";
 import { formatUsd } from "@/components/dashboard/calc-format";
@@ -12,6 +13,14 @@ import {
   MIN_TAX_RATE_PCT,
   parseNonNegativeAmount,
 } from "@/lib/income-calculators";
+
+// Plain-language explanation of how the set-aside is estimated. Frames it as a budgeting rule of
+// thumb driven by the rate the user picks, consistent with the card's "not tax advice" disclaimer.
+const HOW_WE_CALCULATED =
+  "We take your verified annual income and apply the tax rate you choose to estimate how much to set " +
+  "aside, then break that down per year, quarter, and month, along with what's left afterward. Many " +
+  "self-employed people set aside somewhere around a quarter to 30% of what they earn. It's a budgeting " +
+  "rule of thumb to help you plan ahead, not tax advice or a tax filing.";
 
 type TaxEstimatorCardProps = {
   /** Verified annualized income used as the base for the set-aside. */
@@ -55,6 +64,8 @@ export function TaxEstimatorCard({ annualIncome }: TaxEstimatorCardProps) {
         <Figure label="Set aside / month" value={formatUsd(result.monthlySetAside)} />
         <Figure label="After-tax / month" value={formatUsd(result.afterTaxMonthly)} />
       </dl>
+
+      <Disclosure className="mt-5">{HOW_WE_CALCULATED}</Disclosure>
 
       <p className="mt-5 text-(length:--type-fine-print-size) text-ink-muted-48">
         A planning estimate at {result.ratePct}% to help you budget for taxes. It is not tax advice, a tax
