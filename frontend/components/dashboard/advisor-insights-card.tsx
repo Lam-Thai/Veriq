@@ -16,7 +16,7 @@ import type { DashboardStats, UserConnection } from "@/lib/dashboard-data";
 const HOW_WE_CALCULATED =
   "We compare your monthly totals to see how much they go up and down, and factor in how many " +
   "platforms your income comes from — spreading income across more sources generally counts as " +
-  "more consistent. We also compare your most recent months to earlier ones to see whether income " +
+  "more diversified. We also compare your most recent months to earlier ones to see whether income " +
   "is trending up, holding steady, or heading down. This is a general pattern based on a limited " +
   "stretch of months, not a guarantee of what happens next.";
 

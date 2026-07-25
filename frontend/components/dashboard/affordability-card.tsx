@@ -12,8 +12,9 @@ import { computeAffordability, parseNonNegativeAmount, type DtiBand } from "@/li
 // card already displays (3× rent, ~36% DTI) and keeps its "not a lending decision" posture.
 const HOW_WE_CALCULATED =
   "We compare the monthly debts you enter against your verified monthly income to work out your " +
-  "debt-to-income ratio. The rent figures come from two common rules of thumb — rent around three " +
-  "times your monthly income, and keeping housing plus debts within roughly a third of it. These are " +
+  "debt-to-income ratio. The rent figures come from two common rules of thumb — keeping rent to " +
+  "roughly a third of your monthly income (so your income is around three times the rent), and " +
+  "keeping housing plus debts within roughly a third of it. These are " +
   "general guidelines for your own planning, not a pre-qualification, approval, or lending decision.";
 
 type AffordabilityCardProps = {

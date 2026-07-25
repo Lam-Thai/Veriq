@@ -17,7 +17,7 @@ import {
 // Plain-language explanation of how the set-aside is estimated. Frames it as a budgeting rule of
 // thumb driven by the rate the user picks, consistent with the card's "not tax advice" disclaimer.
 const HOW_WE_CALCULATED =
-  "We take your verified annual income and apply the tax rate you choose to estimate how much to set " +
+  "We take your verified annualized income and apply the tax rate you choose to estimate how much to set " +
   "aside, then break that down per year, quarter, and month, along with what's left afterward. Many " +
   "self-employed people set aside somewhere around a quarter to 30% of what they earn. It's a budgeting " +
   "rule of thumb to help you plan ahead, not tax advice or a tax filing.";

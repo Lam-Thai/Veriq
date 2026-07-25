@@ -10,7 +10,7 @@ import type { IncomeProjection } from "@/lib/income-calculators";
 const HOW_WE_CALCULATED =
   "We take your verified monthly income, average it out, and multiply by twelve to show what a full " +
   "year at that pace would look like. We also show how your latest month compares to the one before, " +
-  "and split your income by platform so you can see where it comes from. It's a projection of what " +
+  "and split your income by source so you can see where it comes from. It's a projection of what " +
   "you've earned so far, not a prediction of future earnings.";
 
 type IncomeProjectionCardProps = {
