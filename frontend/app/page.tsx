@@ -7,20 +7,40 @@ import { ProductDashboard } from "@/components/landing/product-dashboard";
 import { ReportSection } from "@/components/landing/report-section";
 import { SecuritySection } from "@/components/landing/security-section";
 import { UseCases } from "@/components/landing/use-cases";
+import { ScrollOut } from "@/components/ui/scroll-out";
 
 export default function Home() {
   return (
     <>
       <Nav />
       <main>
-        <Hero />
-        <ProblemSection />
-        <ConnectPlatforms />
-        <HowItWorks />
-        <ProductDashboard />
-        <ReportSection />
-        <SecuritySection />
-        <UseCases />
+        {/* Each section scrolls out (shrink/blur/fade) as it exits the top, complementing the
+            per-block <Reveal> scroll-in inside each section. ScrollOut is a no-op under
+            prefers-reduced-motion. See components/ui/scroll-out.tsx. */}
+        <ScrollOut>
+          <Hero />
+        </ScrollOut>
+        <ScrollOut>
+          <ProblemSection />
+        </ScrollOut>
+        <ScrollOut>
+          <ConnectPlatforms />
+        </ScrollOut>
+        <ScrollOut>
+          <HowItWorks />
+        </ScrollOut>
+        <ScrollOut>
+          <ProductDashboard />
+        </ScrollOut>
+        <ScrollOut>
+          <ReportSection />
+        </ScrollOut>
+        <ScrollOut>
+          <SecuritySection />
+        </ScrollOut>
+        <ScrollOut>
+          <UseCases />
+        </ScrollOut>
       </main>
     </>
   );
