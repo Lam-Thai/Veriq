@@ -1,4 +1,5 @@
 import { Card } from "@/components/ui/card";
+import { Disclosure } from "@/components/ui/disclosure";
 import { SlidersIcon } from "@/components/ui/icons";
 import {
   computeAdvisorInsights,
@@ -7,6 +8,17 @@ import {
   type AdvisorTrendDirection,
 } from "@/lib/advisor-insights";
 import type { DashboardStats, UserConnection } from "@/lib/dashboard-data";
+
+// Plain-language explanation of how this card's summary is produced. Framed as rule-based
+// ("we compare/factor in") to stay textually distinct from the AI card per the design system.
+// No formulas, raw stats, numbers, or thresholds; the trend caveat hedges honestly as a general
+// pattern and never surfaces internal implementation detail — see issue #38.
+const HOW_WE_CALCULATED =
+  "We compare your monthly totals to see how much they go up and down, and factor in how many " +
+  "platforms your income comes from — spreading income across more sources generally counts as " +
+  "more consistent. We also compare your most recent months to earlier ones to see whether income " +
+  "is trending up, holding steady, or heading down. This is a general pattern based on a limited " +
+  "stretch of months, not a guarantee of what happens next.";
 
 type AdvisorInsightsCardProps = {
   connections: UserConnection[];
@@ -85,6 +97,8 @@ function PopulatedState({ insights }: { insights: AdvisorInsightsOutput }) {
           ))}
         </ul>
       ) : null}
+
+      <Disclosure className="mt-4">{HOW_WE_CALCULATED}</Disclosure>
 
       <p className="mt-4 text-(length:--type-fine-print-size) text-ink-muted-48">
         Rule-based summary computed from your verified connections. Not a credit score or financial advice.
