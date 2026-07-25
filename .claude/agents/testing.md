@@ -24,6 +24,13 @@ The examples in this doc are the *target* patterns. What actually exists today:
 - **Reference to copy:** `frontend/lib/income-calculators.test.ts` — colocated `*.test.ts`,
   explicit `import { describe, it, expect } from "vitest"`, pure-function coverage with `@/` imports
   and fixture factories. Prefer testing the pure lib layer (`lib/*`) directly.
+- **Component/DOM tests are supported now.** `@testing-library/react`, `@testing-library/dom`,
+  `@testing-library/user-event`, and `jsdom` are installed (`frontend/package.json`, devDependencies).
+  The global vitest environment stays `node` (`frontend/vitest.config.ts` is unchanged) — a
+  DOM-dependent component test opts into jsdom **per-file** with a `// @vitest-environment jsdom`
+  docblock as its first line, rather than flipping the shared config. Auto-cleanup isn't wired (test
+  globals are off), so call `cleanup` in an `afterEach` manually. Reference:
+  `frontend/components/ui/disclosure.test.tsx`.
 - **The integration-test harness does NOT exist yet.** `@/test/factories/*`, `@/test/helpers/client`,
   and a dedicated test DB are illustrative only — do not import them until they're built. The same
   goes for the Playwright login helper (`e2e/helpers/auth`): there is no Clerk test-session infra,

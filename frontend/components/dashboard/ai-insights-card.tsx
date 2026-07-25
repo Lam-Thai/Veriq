@@ -2,8 +2,17 @@
 
 import { useEffect, useState } from "react";
 import { Card } from "@/components/ui/card";
+import { Disclosure } from "@/components/ui/disclosure";
 import { SpinnerIcon } from "@/components/ui/icons";
 import type { IncomeInsightsData, IncomeNarrativeOutput } from "@/lib/prompts/income-narrative";
+
+// Plain-language explanation of how this card's summary is produced. Framed as model-authored
+// ("an AI model summarized/describes") to stay textually distinct from the rule-based advisor card
+// per the design system. No formulas, raw stats, numbers, or thresholds — see issue #38.
+const HOW_WE_CALCULATED =
+  "We looked at how much verified income you have from each connected platform, plus how it's " +
+  "trended over your recent months. An AI model summarized that information in plain language — it " +
+  "only describes what's already in your account, it doesn't add outside information or predict anything.";
 
 type FetchState =
   | { phase: "loading" }
@@ -156,6 +165,8 @@ function PopulatedState({ insights }: { insights: IncomeNarrativeOutput }) {
           ))}
         </ul>
       ) : null}
+
+      <Disclosure className="mt-4">{HOW_WE_CALCULATED}</Disclosure>
 
       <p className="mt-4 text-(length:--type-fine-print-size) text-ink-muted-48">
         AI-generated description of your verified income. Not a credit score or financial advice.

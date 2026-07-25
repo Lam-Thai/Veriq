@@ -1,8 +1,17 @@
 import { Card } from "@/components/ui/card";
+import { Disclosure } from "@/components/ui/disclosure";
 import { WalletIcon } from "@/components/ui/icons";
 import { CalcMeter } from "@/components/dashboard/calc-meter";
 import { formatSignedPercent, formatUsd } from "@/components/dashboard/calc-format";
 import type { IncomeProjection } from "@/lib/income-calculators";
+
+// Plain-language explanation of how this projection is produced. Honest that it's a straight
+// projection of verified income, never a prediction — mirrors the card's own disclaimer.
+const HOW_WE_CALCULATED =
+  "We take your verified monthly income, average it out, and multiply by twelve to show what a full " +
+  "year at that pace would look like. We also show how your latest month compares to the one before, " +
+  "and split your income by source so you can see where it comes from. It's a projection of what " +
+  "you've earned so far, not a prediction of future earnings.";
 
 type IncomeProjectionCardProps = {
   projection: IncomeProjection;
@@ -57,6 +66,8 @@ export function IncomeProjectionCard({ projection }: IncomeProjectionCardProps) 
           </ul>
         </div>
       ) : null}
+
+      <Disclosure className="mt-4">{HOW_WE_CALCULATED}</Disclosure>
 
       <p className="mt-4 text-(length:--type-fine-print-size) text-ink-muted-48">
         An informational projection from your verified income, not a guarantee of future earnings.

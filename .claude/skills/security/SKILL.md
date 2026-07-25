@@ -202,7 +202,7 @@ const EnvSchema = z.object({
   DATABASE_URL: z.string().url(),
   CLERK_SECRET_KEY: z.string().min(1),
   NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: z.string().min(1),
-  ANTHROPIC_API_KEY: z.string().startsWith('sk-ant-'),
+  GEMINI_API_KEY: z.string().min(1).optional(), // optional — an additive AI feature must degrade, not 500 unrelated pages
   INTERNAL_JWT_SECRET: z.string().min(32),
   FASTAPI_URL: z.string().url(),
 })
@@ -280,9 +280,10 @@ import it directly instead of going through the API route.
 ```python
 # app/core/config.py — pydantic-settings crashes on startup if vars missing
 class Settings(BaseSettings):
-    DATABASE_URL: str
-    INTERNAL_JWT_SECRET: str
-    ANTHROPIC_API_KEY: str
+    ENVIRONMENT: str = "development"
+    ALLOWED_ORIGINS: list[str] = ["http://localhost:3000"]
+    INTERNAL_JWT_SECRET: str  # required — startup crashes if missing
+    SENTRY_DSN: str | None = None
 ```
 
 ---
@@ -391,7 +392,7 @@ treat them as required, not optional.
 | Auth (user session) | Clerk (`@clerk/nextjs`) | n/a — FastAPI never talks to Clerk directly |
 | Auth (service call) | `jose` (`lib/service-token.ts`, real) | `python-jose` (`app/auth.py`, real) |
 | Rate limit | `lib/rate-limit.ts` (in-process, real) → `@upstash/ratelimit` at multi-instance scale | `slowapi` (`app/core/rate_limit.py`, real) |
-| Password hash | `bcryptjs` (12 rounds) | `passlib[bcrypt]` |
+| Password hash | `bcryptjs` (12 rounds) — *aspirational; not in the repo (auth is Clerk-only, no password hashing yet)* | `passlib[bcrypt]` — *aspirational; the backend has no password auth yet* |
 | Structured logging | `pino` (`lib/logger.ts`, real) | `structlog` (`app/core/logging.py`, real) |
 | Error tracking / APM | `@sentry/nextjs` (real, optional `SENTRY_DSN`) | `sentry-sdk[fastapi]` (real, optional `SENTRY_DSN`) |
 | Env validation | `zod` on `process.env` | `pydantic-settings` |

@@ -1,7 +1,17 @@
 import { Card } from "@/components/ui/card";
+import { Disclosure } from "@/components/ui/disclosure";
 import { ShieldIcon } from "@/components/ui/icons";
 import { CalcMeter } from "@/components/dashboard/calc-meter";
 import type { IncomeStabilityScore, StabilityBand } from "@/lib/income-calculators";
+
+// Plain-language explanation of how the score is built. Describes the three inputs in everyday
+// terms with no formulas, and keeps the card's "descriptive, not a credit score" posture.
+const HOW_WE_CALCULATED =
+  "We turn your verified income into a simple score out of 100, built from three things: how steady " +
+  "your income is from month to month, how evenly it's spread across the platforms you use, and " +
+  "whether it's been rising or falling recently. A higher score just means a steadier, more " +
+  "spread-out income over the months we can see — it's a description for your own reference, not a " +
+  "credit score.";
 
 type StabilityScoreCardProps = {
   score: IncomeStabilityScore;
@@ -40,6 +50,8 @@ export function StabilityScoreCard({ score }: StabilityScoreCardProps) {
         <SubScore label="Diversification" value={score.diversification} hint="How spread across sources" />
         <SubScore label="Trend" value={score.trend} hint="Whether income is rising or falling" />
       </dl>
+
+      <Disclosure className="mt-5">{HOW_WE_CALCULATED}</Disclosure>
 
       <p className="mt-5 text-(length:--type-fine-print-size) text-ink-muted-48">
         A descriptive summary of your verified income mix, for your own reference. It is not a credit score or a

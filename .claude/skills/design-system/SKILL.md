@@ -28,22 +28,35 @@ If the same UI could ship in any SaaS product unchanged, it's not distinctive en
 
 ### Spacing
 ```css
---space-1: 4px;   --space-2: 8px;   --space-3: 12px;  --space-4: 16px;
---space-6: 24px;  --space-8: 32px;  --space-12: 48px; --space-16: 64px;
+--space-xxs: 4px;  --space-xs: 8px;   --space-sm: 12px;  --space-md: 17px;
+--space-lg: 24px;  --space-xl: 32px;  --space-xxl: 48px; --space-section: 80px;
 ```
 
 ### Type Scale
+
+Role-based. Each role is three real custom properties — `-size` / `-lh` / `-ls`
+(size / line-height / letter-spacing), never a single slash-delimited value:
+
 ```css
---text-xs: 12px/1.5;  --text-sm: 13px/1.5;  --text-base: 15px/1.6;
---text-lg: 17px/1.5;  --text-xl: 20px/1.3;  --text-2xl: 24px/1.2;
---text-3xl: 30px/1.15; --text-4xl: 36px/1.1;
+--type-hero-display-size: 56px;    --type-hero-display-lh: 1.07;   --type-hero-display-ls: -0.28px;   /* weight 600 */
+--type-display-lg-size: 40px;      --type-display-lg-lh: 1.1;      --type-display-lg-ls: 0;           /* weight 600 — section H2s */
+--type-lead-size: 28px;            --type-lead-lh: 1.14;           --type-lead-ls: 0.196px;           /* weight 400 */
+--type-tagline-size: 21px;         --type-tagline-lh: 1.19;        --type-tagline-ls: 0.231px;        /* weight 600 */
+--type-body-size: 17px;            --type-body-lh: 1.47;           --type-body-ls: -0.374px;          /* weight 400 — body copy */
+--type-caption-size: 14px;         --type-caption-lh: 1.43;        --type-caption-ls: -0.224px;
+--type-button-large-size: 18px;    --type-button-large-lh: 1;      --type-button-large-ls: 0;
+--type-button-utility-size: 14px;  --type-button-utility-lh: 1.29; --type-button-utility-ls: -0.224px;
+--type-fine-print-size: 12px;      --type-fine-print-lh: 1;        --type-fine-print-ls: -0.12px;
+--type-nav-link-size: 12px;        --type-nav-link-lh: 1;          --type-nav-link-ls: -0.12px;
 ```
-Weights: 400 body / 500 label+caption / 600 subheading / 700 display only.
+
+Weights: 300 / 400 / 600 / 700 — never 500.
 
 ### Radius
+
 ```css
---radius-sm: 4px;  --radius-md: 8px;  --radius-lg: 12px;
---radius-xl: 16px; --radius-full: 9999px;
+--radius-none: 0px; --radius-xs: 5px;  --radius-sm: 8px;
+--radius-md: 11px;  --radius-lg: 18px; --radius-pill: 9999px;
 ```
 
 ### Motion
@@ -59,7 +72,7 @@ Weights: 400 body / 500 label+caption / 600 subheading / 700 display only.
 
 ## Color Rules
 - Define 4–6 base hex values per project, derive all others as tints/shades.
-- Semantic tokens: `--color-primary`, `--color-surface`, `--color-border`, `--color-muted`, `--color-danger`, `--color-success`.
+- Semantic tokens (real): `--color-primary`, `--color-canvas`, `--color-ink`, `--color-ink-muted-80` / `--color-ink-muted-48`, `--color-hairline`, `--color-verified` / `--color-verified-surface`, `--color-pending` / `--color-pending-surface`, `--color-danger` / `--color-danger-surface`. There is **no** `surface` / `border` / `muted` / `success` token — don't invent them.
 - Status colors are pairs, not singles: a foreground (`--color-verified`) plus its matching
   low-contrast background (`--color-verified-surface`) — same shape for pending/danger/etc.
   This is what lets a status pill or badge stay readable without ever needing a shadow or border.
@@ -142,7 +155,7 @@ hue), that slowly pans via `background-position` on `--duration-ambient` / `--ea
   only needs `empty → populated`; see `ui-component`'s state-variants section for the exact test.
 - Empty state = invitation to act, not a blank screen.
 - Loading = skeleton (preserves layout) over spinner (blocks space).
-- Focus: `focus-visible:ring-2 focus-visible:ring-ring` — never `outline-none` alone.
+- Focus: `focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-focus` — outline-based, never a `ring-*` utility, never `outline-none` alone (mirrors the global `:focus-visible` rule in `globals.css`).
 - Hierarchy through scale and weight, not decoration.
 - No `margin-top` on first child / `margin-bottom` on last child — parent handles padding.
 - A value that reads as legitimately non-empty (e.g. `total > 0`) must still *render* as

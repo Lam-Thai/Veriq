@@ -130,7 +130,7 @@ interface InvoiceCardProps {
 // Hierarchy: status badge → amount (primary) → client name → date → actions
 export function InvoiceCard({ invoice, className }: InvoiceCardProps) {
   return (
-    <article className={cn('rounded-lg border border-border bg-surface p-4', className)}>
+    <article className={cn('rounded-lg border border-hairline bg-canvas p-6', className)}>
       {/* ... */}
     </article>
   )
@@ -154,7 +154,7 @@ if (!items.length) return (
 // 2. Loading — skeleton preserves layout, prevents shift
 // Use Suspense + loading.tsx at the route level, or:
 function InvoiceCardSkeleton() {
-  return <div className="h-24 animate-pulse rounded-lg bg-muted" />
+  return <div className="h-24 animate-pulse rounded-lg bg-black/[0.06]" />
 }
 
 // 3. Error — actionable message, not "Something went wrong"
@@ -180,15 +180,19 @@ Every interactive element must handle: `default → hover → focus → active �
 <button
   className={cn(
     // default
-    'rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground',
+    'rounded-md bg-primary px-4 py-2 text-(length:--type-button-utility-size) font-semibold text-on-primary',
+    // transition (so the reduced-motion fallback below has something to disable)
+    'transition-[background-color,transform] duration-(--duration-base) ease-(--ease-out)',
     // hover
     'hover:bg-primary/90',
-    // focus — never remove, never use outline-none without replacement
-    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+    // focus — outline-based; never outline-none, and never a ring-* utility (this system is outline-based)
+    'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-focus',
     // active
-    'active:scale-[0.98]',
+    'active:scale-(--press-scale)',
     // disabled
     'disabled:pointer-events-none disabled:opacity-50',
+    // respect reduced motion
+    'motion-reduce:transition-none',
   )}
   disabled={isLoading}
 >
@@ -202,32 +206,62 @@ Every interactive element must handle: `default → hover → focus → active �
 
 ```tsx
 'use client'
-import { useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
+import { useState } from 'react'
 import { z } from 'zod'
 
+// This repo has NO react-hook-form / @hookform — forms are plain zod `safeParse` + controlled
+// inputs. Match this client schema to the server zod schema exactly.
 const Schema = z.object({
   amount: z.number().positive('Amount must be greater than 0'),
   note: z.string().max(500).optional(),
 })
-type FormValues = z.infer<typeof Schema>
 
 export function InvoiceForm() {
-  const form = useForm<FormValues>({ resolver: zodResolver(Schema) })
+  const [amount, setAmount] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [pending, setPending] = useState(false)
+
+  async function handleSubmit(event: React.FormEvent) {
+    event.preventDefault()
+    const parsed = Schema.safeParse({ amount: Number(amount) })
+    if (!parsed.success) {
+      setError(parsed.error.issues[0]?.message ?? 'Check your input')
+      return
+    }
+    setError(null)
+    setPending(true)
+    try {
+      // ...submit parsed.data
+    } finally {
+      setPending(false)
+    }
+  }
 
   return (
     // noValidate — zod owns all validation messages
-    <form onSubmit={form.handleSubmit(onSubmit)} noValidate>
-      <label htmlFor="amount">Amount</label>
-      <input id="amount" type="number" {...form.register('amount', { valueAsNumber: true })} />
+    <form onSubmit={handleSubmit} noValidate>
+      <label htmlFor="amount" className="block text-(length:--type-fine-print-size) text-ink-muted-48">
+        Amount
+      </label>
+      <input
+        id="amount"
+        type="number"
+        inputMode="decimal"
+        value={amount}
+        onChange={(event) => setAmount(event.target.value)}
+        className={cn(
+          'mt-1 w-full rounded-lg border border-hairline bg-canvas px-3 py-2 text-ink',
+          'outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-focus',
+        )}
+      />
       {/* inline field error — not just a top banner */}
-      {form.formState.errors.amount && (
-        <p role="alert" className="text-sm text-danger">
-          {form.formState.errors.amount.message}
+      {error ? (
+        <p role="alert" className="mt-1 text-(length:--type-caption-size) text-danger">
+          {error}
         </p>
-      )}
-      <button type="submit" disabled={form.formState.isSubmitting}>
-        {form.formState.isSubmitting ? 'Saving…' : 'Save'}
+      ) : null}
+      <button type="submit" disabled={pending}>
+        {pending ? 'Saving…' : 'Save'}
       </button>
     </form>
   )
@@ -236,7 +270,8 @@ export function InvoiceForm() {
 
 **Form rules:**
 - `noValidate` on `<form>` — zod controls all messages.
-- Disable submit while `isSubmitting` — no double-submit.
+- Disable submit while the request is pending (a `pending` state) — no double-submit. This repo has
+  no react-hook-form/@hookform; forms are plain zod `safeParse` + controlled inputs.
 - Inline field-level errors beneath each input.
 - Match client zod schema to server zod schema exactly.
 
@@ -245,7 +280,9 @@ export function InvoiceForm() {
 ## Accessibility Non-Negotiables
 - Semantic HTML: `<article>`, `<section>`, `<nav>`, `<button>` — not `<div onClick>`.
 - All interactive elements keyboard-reachable.
-- `focus-visible:ring-2` on every focusable element — never `outline-none` alone.
+- `focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-focus` on
+  every focusable element — never `outline-none` alone, and never a `ring-*` utility (this system is
+  outline-based; see `components/ui/pill-button.tsx`).
 - Images: `alt` always. Decorative: `alt="" aria-hidden="true"`.
 - Icon-only buttons: `aria-label` required.
 - Color never the sole information carrier — pair with icon, label, or pattern.
@@ -259,7 +296,7 @@ export function InvoiceForm() {
       synchronously (not a promise prop); otherwise all four are required
 - [ ] All 5 interactive states styled (default, hover, focus, active, disabled)
 - [ ] Semantic HTML (no div soup)
-- [ ] Focus ring on all interactive elements
+- [ ] Focus outline on all interactive elements (`outline-*`, never `ring-*`)
 - [ ] No hardcoded hex colors — CSS vars or Tailwind tokens only
 - [ ] Mobile layout works at 375px
 - [ ] Forms: `noValidate`, inline errors, disabled while submitting
