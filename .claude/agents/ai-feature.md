@@ -93,7 +93,7 @@ version below:
   caching to avoid calling the model on every page load, the `AbortController` timeout around the
   actual API call, and a never-throws discriminated-union result type
   (`{status:"no_data"} | {status:"ok",data} | {status:"error"}`).
-- `frontend/app/api/rate-limit.ts` — the per-key in-process limiter, reused for both a per-user
+- `frontend/lib/rate-limit.ts` — the per-key in-process limiter, reused for both a per-user
   and a global (free-tier-quota-aware) check.
 - `frontend/app/api/ai/income-insights/route.ts` — auth-gate → per-user rate limit → global rate
   limit → call the service → map the result to the `{ data }`/`{ error }` envelope, with a

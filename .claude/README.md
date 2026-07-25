@@ -8,7 +8,7 @@ and skills are auto-discovered.
 
 ```
 .claude/
-  agents/            ← one subagent per file, YAML frontmatter (name, description, model)
+  agents/            ← one subagent per file, YAML frontmatter (name, description, model; some also declare a `tools:` field)
     ai-feature.md
     api-route.md
     auth.md
@@ -19,6 +19,8 @@ and skills are auto-discovered.
     github-issue.md
     migration.md
     payments.md
+    planning.md
+    research.md
     security-audit.md
     testing.md
     ui-component.md
@@ -65,6 +67,8 @@ and skills are auto-discovered.
 | `github-issue` | github-issues, engineering-standards |
 | `migration` | postgresql, prisma, sqlalchemy, engineering-standards |
 | `payments` | payments, typescript, nextjs, prisma, api-contracts, security, error-handling, engineering-standards |
+| `planning` | planning, research, github-issues, engineering-standards (+ whichever runtime skills the phases touch, to feasibility-check each) |
+| `research` | research, engineering-standards (+ whichever domain skill matches the question: nextjs/typescript, python, prisma/sqlalchemy/postgresql, ai-integration, security, payments, api-contracts, design-system) |
 | `security-audit` | security, api-contracts, typescript, python, error-handling, payments, engineering-standards |
 | `testing` | typescript, python, api-contracts, error-handling, engineering-standards |
 | `ui-component` | typescript, nextjs, design-system, engineering-standards |
