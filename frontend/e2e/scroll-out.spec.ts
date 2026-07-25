@@ -105,15 +105,16 @@ test.describe("ScrollOut — tall section", () => {
           tallest = w;
         }
       }
-      if (!tallest || tallestHeight < vh * 1.6) return { skip: true } as const;
+      if (!tallest || tallestHeight < vh * 1.6) return { skip: true, index: -1 };
 
       // Scroll so the section's top edge is a full `span` above the viewport top (topRamp === 1).
       const docTop = window.scrollY + tallest.getBoundingClientRect().top;
       window.scrollTo({ top: docTop + span, left: 0, behavior: "instant" });
-      return { skip: false, id: tallest.id || null, index: wrappers.indexOf(tallest) } as const;
+      return { skip: false, index: wrappers.indexOf(tallest) };
     });
 
-    if (result.skip) return; // no section tall enough at this viewport — nothing to assert
+    // No section tall enough at this viewport — report as skipped rather than a silent pass.
+    test.skip(result.skip, "no landing section is tall enough at this viewport to exercise the gate");
 
     await page.evaluate(
       () => new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r()))),
