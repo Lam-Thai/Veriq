@@ -6,6 +6,7 @@ import { OverviewPanel } from "@/components/dashboard/overview-panel";
 import { CalculatorsPanel } from "@/components/dashboard/calculators-panel";
 import { ExpensesPanel } from "@/components/dashboard/expenses-panel";
 import { ReportPanel } from "@/components/dashboard/report-panel";
+import { SharingPanel } from "@/components/dashboard/sharing-panel";
 import { getUserConnections, computeDashboardStats } from "@/lib/dashboard-data";
 import { listExpensesForUser, getExpenseSummaryForUser } from "@/lib/expense-data";
 import { computeExpenseSummary, type ExpenseSummary } from "@/lib/expense-calculators";
@@ -17,6 +18,12 @@ import {
   getReportHistoryForUser,
   type ReportHistoryEntry,
 } from "@/lib/report-jobs";
+import {
+  listSharesForUser,
+  MAX_ACTIVE_SHARES_PER_REPORT,
+  MAX_SHARE_EXPIRY_DAYS,
+  type ReportShareDto,
+} from "@/lib/report-shares";
 import { resolveUserPlan } from "@/lib/plan-resolution";
 import { PLAN_LIMITS } from "@/lib/plan-limits";
 
@@ -59,6 +66,12 @@ export default async function DashboardPage() {
         ])
       : [{ expenses: [], nextCursor: null }, computeExpenseSummary([], expenseIncomeContext)];
 
+  // Sharing tab: new links always point at the most recent READY report job. reportHistory is
+  // already newest-first (getReportHistoryForUser), so the first READY entry is it — no separate
+  // query needed. A user with no User row yet has neither a report nor any shares.
+  const latestReadyReportJobId = reportHistory.find((entry) => entry.status === "READY")?.id ?? null;
+  const initialShares: ReportShareDto[] = internalUserId ? await listSharesForUser(internalUserId) : [];
+
   return (
     <main className="min-h-screen bg-gradient-flow-light px-6 py-16">
       <div className="mx-auto max-w-grid text-center">
@@ -91,6 +104,14 @@ export default async function DashboardPage() {
               history={reportHistory}
               nextReportAvailableAt={nextReportAvailableAt}
               reportValidityDays={limits.reportValidityDays}
+            />
+          }
+          sharing={
+            <SharingPanel
+              latestReadyReportJobId={latestReadyReportJobId}
+              initialShares={initialShares}
+              maxActiveShares={MAX_ACTIVE_SHARES_PER_REPORT}
+              maxShareExpiryDays={MAX_SHARE_EXPIRY_DAYS}
             />
           }
           account={
