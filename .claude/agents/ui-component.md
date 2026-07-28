@@ -56,6 +56,27 @@ Push `"use client"` as far down the tree as possible — only the leaf that need
 interactivity should be a client component. Wrap it in a Server Component parent
 that fetches data.
 
+### Two build-breakers that bite client components in this repo
+Both are covered in full in the `nextjs` skill; they're repeated here because they surface as
+confusing failures *while* you're writing the component, not at review time.
+- **`react-hooks/purity`** — a build-blocking lint error on `Date.now()` / `new Date()` reachable
+  from render (component body, `useMemo`, or a helper called during render). Any time-derived UI
+  state ("expired?", "in the past?") trips it. Hoist the clock read into a plain function declared
+  *outside* the component.
+- **`server-only` modules can't be imported from `"use client"`** — including for a bare exported
+  constant. Only `import type` crosses that boundary. Don't duplicate the constant into the
+  component (silent drift) and don't remove the `server-only` guard; thread the value down as a
+  prop from the RSC page that already imports the module.
+
+### Reuse a `components/ui/` primitive — but check its semantics actually fit
+Default to the shared primitive (`dialog.tsx`, `disclosure.tsx`, `pill-button.tsx`) over
+hand-rolling; never rebuild a modal. But read what it does before assuming it fits: `disclosure.tsx`
+keeps its panel **eagerly mounted** and toggles the `hidden` attribute, which is right for a11y and
+for content that's already in hand — and wrong if expanding is supposed to *trigger* a fetch, since
+every collapsed row would fire its request on first render. Lazily-loaded content needs a variant
+that actually mounts on open. When you deviate from a primitive, say why in a comment; a silent
+one-off looks like someone didn't know the primitive existed.
+
 When a client leaf is carved out of an otherwise-static section (e.g. just the mobile menu
 toggle inside a server-rendered nav), say so in a one-line comment on the component —
 state what it owns and why it's isolated. The next reader shouldn't have to guess why one

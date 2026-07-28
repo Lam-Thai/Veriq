@@ -63,7 +63,14 @@ enum InvoiceStatus { DRAFT SENT PAID VOID }
 ```
 
 - IDs: `cuid()` default. `uuid()` when externally exposed.
-- Every model gets `createdAt`, `updatedAt`, and `deletedAt?` (soft delete).
+- Every model gets `createdAt`, `updatedAt`, and `deletedAt?` (soft delete) — with two principled
+  exceptions, both real in this schema. An **append-only log** table (`ReportShareView`) has no
+  `updatedAt`/`deletedAt` because rows are never mutated or removed; adding them would imply a
+  lifecycle that doesn't exist. And a model whose lifecycle is already carried by a **domain-
+  meaningful timestamp** (`ReportShare.revokedAt`, plus `expiresAt`) uses that instead of a generic
+  `deletedAt` — "revoked" is a distinct, user-visible state that has to be told apart from "expired",
+  which a single `deletedAt` flag can't express. Deviate for one of these reasons and say so in a
+  comment; don't deviate just because a field seemed unnecessary at the time.
 - Enums for fixed value sets — never raw strings.
 - `onDelete: Cascade` on child relations. `Restrict` when accidental cascade is dangerous.
 - Every FK column has `@@index`.
@@ -94,6 +101,17 @@ const invoice = await db.invoice.findUnique({
 if (!invoice) return ApiError.notFound()
 ```
 
+**This applies to `include` too — and that's where it actually gets missed.** `include: { reportJob: true }`
+is `SELECT *` on the joined table wearing a nicer name, and it will happily drag a
+`Bytes`/`Text` column across the wire on a path that never renders it. A real instance: the public
+verify page's lookup pulled `ReportJob.pdfData` (hundreds of KB) on *every* page view just to show
+a date and a platform label. Give a relation its own nested `select`, and if one caller genuinely
+needs the heavy column, split it into a second narrowly-scoped helper that only that caller runs:
+```ts
+include: { reportJob: { select: { createdAt: true, platformsParam: true } } }  // page path
+// ...and a separate getReportPdfForShare(reportJobId) for the one route serving the bytes
+```
+
 ### Soft delete — filter in every list query
 ```ts
 const invoices = await db.invoice.findMany({
@@ -122,6 +140,53 @@ await db.userSettings.upsert({
   update: { theme: input.theme },
 })
 ```
+
+### Enforcing a "max N per parent" cap — advisory lock, not a bare count-then-create
+A `count()` followed by a `create()` is a check-then-act race: two concurrent requests both read
+`9`, both pass a `< 10` check, both insert, and the cap is silently 11. Postgres can't express
+"at most N rows" as a constraint, so this is app-level — but it has to be **inside one transaction
+under an advisory lock**, which serializes only the callers contending for that same parent:
+
+```ts
+return db.$transaction(async (tx) => {
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${parentId}))`
+  // ownership/status re-checked INSIDE the lock — a pre-check in the route isn't enough
+  const parent = await tx.reportJob.findFirst({ where: { id: parentId, userId, status: 'READY' }, select: { id: true } })
+  if (!parent) return { ok: false, reason: 'not_found' } as const
+  const active = await tx.reportShare.count({ where: { reportJobId: parentId, revokedAt: null, expiresAt: { gt: new Date() } } })
+  if (active >= MAX_ACTIVE) return { ok: false, reason: 'cap_reached' } as const
+  const row = await tx.reportShare.create({ data: { ... }, select: { id: true } })
+  return { ok: true, id: row.id } as const
+})
+```
+`pg_advisory_xact_lock` is auto-released at commit/rollback — no unlock call, no leak on error.
+**Choose the lock key to match the scope of the thing being capped**: a per-report cap locks on
+`hashtext(reportJobId)`, not `hashtext(userId)`, so a user creating shares on two different reports
+never serializes against themselves. Three real usages to copy: `lib/report-jobs.tsx`
+(`createReportJobIfAllowed`), `app/connect/[slug]/callback/route.ts` (connection cap), and
+`lib/report-shares.ts` (`createShareIfAllowed`). Return a typed reason rather than throwing, so the
+route can map `not_found` → 404 and `cap_reached` → 409.
+
+### Claiming something exactly once — scoped `updateMany`, no advisory lock needed
+For "only the first caller may do X" (send the one-time notification, claim a job, run a
+one-shot side effect), guard on the column itself and let the row lock do the work:
+
+```ts
+const { count } = await tx.reportShare.updateMany({
+  where: { id: shareId, firstViewedAt: null },   // ← the WHERE clause *is* the lock
+  data: { firstViewedAt: new Date() },
+})
+const isFirstView = count === 1                   // exactly one caller ever sees true
+```
+Race-safe under Postgres's default READ COMMITTED **without** an advisory lock, and it's worth
+knowing why this differs from the cap case above: here there's a specific existing row to lock on,
+so the first transaction to reach the statement takes a row lock; a concurrent second blocks, then
+re-evaluates its `WHERE` against the now-committed row and matches zero. The cap case has no such
+row — it's counting rows that don't exist yet — which is exactly why it needs the advisory lock.
+
+Never read-then-write this (`findFirst` → `if (!x.claimedAt)` → `update`); the gap between the two
+statements is the bug. And schedule whatever the claim gates (an email, a webhook) via `after()`
+**outside** the transaction — an external network call must never hold a DB connection open.
 
 ## Error Codes
 ```ts

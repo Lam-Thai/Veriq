@@ -27,7 +27,7 @@ Never deviate from this shape. Clients depend on it.
 | `200` | Successful GET or PATCH |
 | `201` | Successful POST that creates a resource |
 | `202` | Request accepted, processing async (background job enqueued) |
-| `204` | Successful DELETE (no body) |
+| `200` | Successful DELETE — returns `{ data: { id } }`, **not** a bare `204`. See note below |
 | `400` | Malformed syntax (JSON parse failed, bad param type) |
 | `401` | Not authenticated |
 | `403` | Authenticated but not permitted for this action |
@@ -37,6 +37,17 @@ Never deviate from this shape. Clients depend on it.
 | `422` | Valid syntax, failed business validation |
 | `429` | Rate limit exceeded — include a `Retry-After` header (seconds), derived from the limiter's actual window/reset time, not a guessed constant |
 | `500` | Internal server error — never leak details |
+
+### DELETE returns `200 { data: { id } }` — a deliberate deviation from the REST default
+Textbook REST says `204 No Content`. This repo returns `200` with the deleted id in the standard
+envelope, and every real DELETE route does it consistently — `app/api/expenses/[id]/route.ts`,
+`app/api/report/shares/[id]/route.ts`. Two reasons: the client gets an unambiguous confirmation of
+*which* row the server acted on (useful for reconciling optimistic UI when several deletes are in
+flight), and every response in the app stays inside the one `{ data }` / `{ error }` envelope
+rather than one verb carving out a bodyless exception.
+
+This entry previously said `204`, which no route ever implemented — the doc was corrected to match
+the code, not the reverse. If you're writing a DELETE, return `200 { data: { id } }`.
 
 ---
 

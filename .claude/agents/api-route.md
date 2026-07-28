@@ -167,8 +167,30 @@ above — see `frontend/app/api/webhooks/stripe/route.ts` for the real, working 
   a unique external id over anything that increments or appends.
 - See the `payments` skill for the Stripe-specific version of this pattern in full.
 
+## Token-Gated Public Routes Are a Third Shape
+Neither the CRUD skeleton nor the webhook shape. The caller is whoever holds an unguessable
+bearer token (a share link, an invite), not a session and not a signed third party — see
+`app/api/verify/[token]/download/route.ts` and its companion page `app/verify/[token]/page.tsx`
+for the real pattern, and run the `security` skill's "Public / Unauthenticated Routes" checklist
+before merging one.
+- **No `currentUser()`** — trust comes from the token. Clerk gating in `proxy.ts` is an
+  allowlist, so a new route is public *by default*; you don't edit middleware to make it public,
+  which also means nothing prompts you to notice that it is.
+- **Shape-validate the token, then look it up by hash.** Never store or query the raw token —
+  `sha256` it (see the `security` skill's "Secrets and PII at Rest"). A regex check first means
+  malformed input costs zero DB round-trips.
+- **Not-found and malformed must be byte-identical**, and expired/revoked must be re-checked
+  independently in *every* route — a direct download URL gets bookmarked and re-hit long after the
+  page that linked it stopped working. Collapse all of them to one `ApiError.notFound()` in an API
+  route; a page may show distinct friendly expired/revoked copy, but never anything identifying
+  the owner or the underlying resource.
+- **Rate limit keyed on the token**, not a user id (there isn't one) and not an IP:
+  `` checkRateLimit(`verify-download:${token}`, 20, 60_000) ``.
+- **Never log the token** or a URL containing it — log internal ids only.
+
 ## Non-Negotiable Rules
-- Auth is line 1 (except webhook routes — see above). Zero logic runs before it.
+- Auth is line 1 (except webhook routes and token-gated public routes — see above, where the
+  signature check / token lookup takes its place). Zero logic runs before it.
 - Always `safeParse` — never `parse` (throws raw zod errors to client).
 - Always `select` on Prisma — never return full model rows.
 - PATCH body uses `BodySchema.partial()` — never require full object for updates.
@@ -189,6 +211,7 @@ above — see `frontend/app/api/webhooks/stripe/route.ts` for the real, working 
 - [ ] Resource ownership: `userId` in `where` clause
 - [ ] `select` on all Prisma queries
 - [ ] No internal error details in response body
-- [ ] Correct HTTP status codes (201 create, 204 delete, 422 validation, 202 async job accepted)
+- [ ] Correct HTTP status codes (201 create, **200 `{ data: { id } }` delete — not 204**, 422
+      validation, 409 conflict/cap-reached, 202 async job accepted)
 - [ ] Webhook routes: raw body used for signature verification, verified before any processing
 - [ ] Passes the `engineering-standards` Definition of Done

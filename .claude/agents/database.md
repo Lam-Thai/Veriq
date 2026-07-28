@@ -45,10 +45,20 @@ ask what you can reasonably infer.
 ## Task Protocol
 1. Design the entity and relationships on paper first (fields, types, FK directions).
 2. Write the Prisma model (source of truth).
-3. Mirror it as a SQLAlchemy model for FastAPI.
+3. Mirror it as a SQLAlchemy model for FastAPI — **only if FastAPI actually reads the table**
+   (see "Mirror only what FastAPI queries" below).
 4. Write queries for both runtimes as needed.
 5. Identify and add indexes.
 6. Run the audit checklist.
+
+## Mirror only what FastAPI queries
+Step 3 is conditional, not automatic. `backend/app/` has **no models directory at all** today —
+not even `User` or `ReportJob` is mirrored — so this repo's actual practice is "mirror what FastAPI
+needs to query", not "mirror everything for symmetry". Adding SQLAlchemy models with zero readers
+is dead code that then has to be kept in sync with every future Prisma migration. If nothing in
+`backend/` will read the table, skip the mirror and note the decision. (The `sqlalchemy` skill
+describes the target-state layer; see also the repo's standing note that those DB docs are
+deliberately aspirational — don't "correct" them to match reality.)
 
 ---
 
@@ -151,6 +161,21 @@ const result = await db.$transaction(async (tx) => {
 await db.invoice.update({ where: { id }, data: { deletedAt: new Date() } })
 ```
 
+### Concurrency: never write a bare check-then-act
+Two shapes, both real in this repo — full versions in the `prisma` and `postgresql` skills. Getting
+these wrong produces bugs that pass every test and only appear under real concurrent load.
+- **"At most N per parent" cap** → `db.$transaction` + `pg_advisory_xact_lock(hashtext(parentId))`,
+  with the count *and* the insert inside the lock. A `count()` then `create()` without it lets two
+  callers both pass a `< N` check. Lock on the parent the cap belongs to, not the user.
+- **"Exactly once" claim** (one-time notification, job claim) → a scoped `updateMany` whose `WHERE`
+  carries the guard (`{ id, claimedAt: null }`), then check `count === 1`. The `WHERE` clause is the
+  row lock; no advisory lock needed, and no `SELECT`-then-`UPDATE` gap to race through.
+
+### `include` is `SELECT *` on the joined table
+The "always `select`" rule extends to relations. `include: { reportJob: true }` will pull a
+`Bytes`/`Text` column across the wire on a path that never renders it. Give every relation its own
+nested `select`, and split a heavy column into a separate helper only the route that serves it calls.
+
 ## SQLAlchemy Query Patterns
 
 ```python
@@ -182,7 +207,11 @@ await db.commit()
 - [ ] FK columns indexed
 - [ ] Soft-deleted rows filtered in all list queries
 - [ ] Multi-step writes in transaction
-- [ ] Prisma: `select` on all queries
+- [ ] Prisma: `select` on all queries — including a nested `select` on every `include`d relation,
+      so no `Bytes`/`Text` column rides along on a path that doesn't render it
+- [ ] Any cap/quota enforced under an advisory lock inside the transaction; any "exactly once"
+      side effect gated by a scoped `updateMany` + zero-count check — no check-then-act
+- [ ] SQLAlchemy mirror written only if FastAPI actually reads the table (else skipped + noted)
 - [ ] SQLAlchemy model table names match Prisma (PascalCase)
 - [ ] No schema changes in Alembic competing with Prisma
 - [ ] Passes the `engineering-standards` Definition of Done
