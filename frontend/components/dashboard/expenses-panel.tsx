@@ -34,7 +34,7 @@ function formatExpenseDate(iso: string): string {
   return Number.isNaN(parsed) ? iso.slice(0, 10) : DATE_FMT.format(new Date(parsed));
 }
 
-type ListStatus = "idle" | "loading" | "loadingMore" | "error";
+type ListStatus = "idle" | "loading" | "loadingMore" | "error" | "loadMoreError";
 
 /**
  * "Expenses" tab body — the interactive counterpart to the read-only Calculators tab. Renders the
@@ -87,6 +87,8 @@ export function ExpensesPanel({ initialExpenses, initialNextCursor, summary }: E
     setFilter(next);
     setListStatus("loading");
     setListError(null);
+    setPendingDelete(null);
+    setRowError({});
     try {
       const { data, nextCursor: cursor } = await fetchPage(next);
       if (seq !== requestSeqRef.current) return;
@@ -114,7 +116,7 @@ export function ExpensesPanel({ initialExpenses, initialNextCursor, summary }: E
     } catch (err) {
       if (seq !== requestSeqRef.current) return;
       setListError(err instanceof Error ? err.message : "Couldn't load more expenses.");
-      setListStatus("idle");
+      setListStatus("loadMoreError");
     }
   }
 
@@ -175,8 +177,11 @@ export function ExpensesPanel({ initialExpenses, initialNextCursor, summary }: E
   }
 
   // True empty state: the user has no expenses at all (in the trailing window). An invitation to
-  // act, not a blank screen — and not shown merely because a category filter returned nothing.
-  if (!summary.hasExpenses) {
+  // act, not a blank screen — and not shown merely because a category filter returned nothing. Also
+  // gated on the local `expenses` list so a just-added first expense (refreshAfterMutation already
+  // fetched it into local state) doesn't get masked by the server `summary` prop, which only catches
+  // up once router.refresh() resolves.
+  if (!summary.hasExpenses && expenses.length === 0) {
     return (
       <div className="flex flex-col gap-4">
         <Card className="mx-auto max-w-md text-center">
@@ -274,6 +279,11 @@ export function ExpensesPanel({ initialExpenses, initialNextCursor, summary }: E
                 />
               ))}
             </ul>
+            {listStatus === "loadMoreError" && listError ? (
+              <p role="alert" className="text-center text-(length:--type-caption-size) text-danger">
+                {listError}
+              </p>
+            ) : null}
             {nextCursor ? (
               <div className="flex justify-center">
                 <PillButton
@@ -284,7 +294,7 @@ export function ExpensesPanel({ initialExpenses, initialNextCursor, summary }: E
                   disabled={listStatus === "loadingMore"}
                   aria-busy={listStatus === "loadingMore"}
                 >
-                  {listStatus === "loadingMore" ? "Loading…" : "Load more"}
+                  {listStatus === "loadingMore" ? "Loading…" : listStatus === "loadMoreError" ? "Try again" : "Load more"}
                 </PillButton>
               </div>
             ) : null}

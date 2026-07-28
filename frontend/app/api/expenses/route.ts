@@ -7,7 +7,7 @@ import { loggerFor } from "@/lib/logger";
 import { db } from "@/lib/db";
 import { getInternalUserId } from "@/lib/report-jobs";
 import { createExpenseSchema, listExpensesQuerySchema } from "@/lib/expenses";
-import { listExpensesForUser, serializeExpense } from "@/lib/expense-data";
+import { EXPENSE_SELECT, listExpensesForUser, serializeExpense } from "@/lib/expense-data";
 
 // Prisma + Clerk — Node APIs, never Edge.
 export const runtime = "nodejs";
@@ -105,15 +105,7 @@ export async function POST(request: Request) {
         note: note ?? null,
         deductible: deductible ?? true,
       },
-      select: {
-        id: true,
-        amount: true,
-        category: true,
-        date: true,
-        note: true,
-        deductible: true,
-        createdAt: true,
-      },
+      select: EXPENSE_SELECT,
     });
 
     log.info({ expenseId: created.id }, "[expenses] created");

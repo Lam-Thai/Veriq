@@ -63,18 +63,20 @@ const dateSchema = z
   .refine((value) => {
     const time = Date.parse(`${value}T00:00:00.000Z`);
     if (Number.isNaN(time)) return false;
-    const now = Date.now();
-    // Allow up to the end of the current UTC day; reject dates before 2000.
-    const oneDayMs = 24 * 60 * 60 * 1000;
-    return time >= Date.parse("2000-01-01T00:00:00.000Z") && time <= now + oneDayMs;
+    const now = new Date();
+    // Allow up to (but not including) the start of tomorrow, UTC — an explicit calendar cutoff
+    // rather than "now + 24h", which would accept tomorrow's date whenever it's called before
+    // midday UTC. Reject dates before 2000.
+    const tomorrowUtc = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1);
+    return time >= Date.parse("2000-01-01T00:00:00.000Z") && time < tomorrowUtc;
   }, { message: "Date must be a real date, not in the future" });
 
 // `null` clears the note; omitting it leaves it unchanged (only meaningful on update). Empty/
 // whitespace-only strings normalize to `null` so a blank note is never stored as "".
 const noteSchema = z
   .string()
-  .max(MAX_NOTE_LENGTH)
   .transform((value) => value.trim())
+  .pipe(z.string().max(MAX_NOTE_LENGTH))
   .transform((value) => (value.length === 0 ? null : value));
 
 export const createExpenseSchema = z.object({

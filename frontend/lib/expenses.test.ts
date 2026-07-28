@@ -37,6 +37,13 @@ describe("createExpenseSchema", () => {
     expect(createExpenseSchema.safeParse({ ...VALID, date: "2020-01-01" }).success).toBe(true);
   });
 
+  it("rejects tomorrow's UTC date regardless of time of day", () => {
+    const now = new Date();
+    const tomorrow = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1));
+    const tomorrowStr = tomorrow.toISOString().slice(0, 10);
+    expect(createExpenseSchema.safeParse({ ...VALID, date: tomorrowStr }).success).toBe(false);
+  });
+
   it("normalizes a blank/whitespace note to null and trims a real note", () => {
     expect(createExpenseSchema.parse({ ...VALID, note: "   " }).note).toBeNull();
     expect(createExpenseSchema.parse({ ...VALID, note: "  gas  " }).note).toBe("gas");

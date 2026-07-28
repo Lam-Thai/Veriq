@@ -215,7 +215,7 @@ Every interactive element must handle: `default → hover → focus → active �
 
 ```tsx
 'use client'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { z } from 'zod'
 
 // This repo has NO react-hook-form / @hookform — forms are plain zod `safeParse` + controlled
@@ -229,12 +229,14 @@ export function InvoiceForm() {
   const [amount, setAmount] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [pending, setPending] = useState(false)
+  const amountRef = useRef<HTMLInputElement>(null)
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault()
     const parsed = Schema.safeParse({ amount: Number(amount) })
     if (!parsed.success) {
       setError(parsed.error.issues[0]?.message ?? 'Check your input')
+      amountRef.current?.focus()
       return
     }
     setError(null)
@@ -254,6 +256,7 @@ export function InvoiceForm() {
       </label>
       <input
         id="amount"
+        ref={amountRef}
         type="number"
         inputMode="decimal"
         value={amount}
