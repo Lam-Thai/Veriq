@@ -98,6 +98,8 @@ class ErrorResponse(BaseModel):
 ---
 
 ## Pagination Contract
+
+### Offset (simple; small/bounded tables)
 ```ts
 // Request: GET /api/invoices?page=0&perPage=20&sort=createdAt&order=desc
 
@@ -107,6 +109,23 @@ class ErrorResponse(BaseModel):
   "meta": { "page": 0, "perPage": 20, "total": 143, "totalPages": 8 }
 }
 ```
+
+### Keyset / cursor (tables that grow, or when the spec says keyset)
+Same envelope, but `meta` carries an opaque forward cursor instead of page/total (no `COUNT(*)` on
+a hot path). `nextCursor` is `null` on the last page. The real reference is
+`app/api/expenses/route.ts` + `lib/expense-data.ts`:
+```ts
+// Request: GET /api/expenses?limit=20&cursor=<lastId>&category=SUPPLIES
+{
+  "data": [...],
+  "meta": { "nextCursor": "cljk3x9..." | null }
+}
+```
+Implementation notes (Prisma): order by a stable, unique-terminated key
+(`orderBy: [{ date: "desc" }, { id: "desc" }]`), fetch `take: limit + 1` as a "has-more" probe,
+and page with `cursor: { id }, skip: 1`. **Ownership-gate the cursor before use** — Prisma resolves
+the cursor row by primary key *before* the `where` filter applies, so a cursor is IDOR surface (see
+the `security` skill). Clamp `limit` in the query zod schema (`.max(50)`), never trust it raw.
 
 ---
 

@@ -163,6 +163,13 @@ hue), that slowly pans via `background-position` on `--duration-ambient` / `--ea
   rounds to whole dollars turns $0.30 into the on-screen string "$0", which looks identical to
   the empty state even though the empty-state guard was satisfied. Prefer formatting that can't
   collapse a real value to zero, or tighten the guard to match what's actually displayed.
+- Modals use the one shared primitive, `components/ui/dialog.tsx` — never hand-roll another. It
+  owns the full contract: `role="dialog"` + `aria-modal`, a labelled title, Escape-to-close, Tab
+  focus trap, initial focus moved inside, focus restored to the trigger on close, and body-scroll
+  lock. Backdrop gotcha: the scrim must be the **same** element that carries the close handler (so
+  `target === currentTarget` distinguishes a backdrop press from a press inside the panel) — a
+  separate overlaid scrim `div` swallows the click and backdrop-close silently never fires. No blur
+  (glassmorphism is banned); a plain wash only.
 - When two components present alternate views of the *same* underlying data (e.g. an
   AI-generated summary next to a deterministic, rule-based one — see
   `components/dashboard/ai-insights-card.tsx` and `advisor-insights-card.tsx`), make the
@@ -179,4 +186,8 @@ hue), that slowly pans via `background-position` on `--duration-ambient` / `--ea
 - WCAG AA: 4.5:1 contrast for body text, 3:1 for large text.
 - `alt` always. Decorative images: `alt="" aria-hidden="true"`.
 - Icon-only buttons: `aria-label` required.
+- Form fields with validation errors: set `aria-invalid` and `aria-describedby` pointing at the
+  error element's id (an accessible dialog shell doesn't make the form inside it accessible), and
+  move focus to the first invalid field on a failed submit — don't leave focus on the submit button
+  with only a visual error. See `components/dashboard/expense-form-dialog.tsx`.
 - Mobile-first: base → `md:` → `lg:`. Test at 375px.

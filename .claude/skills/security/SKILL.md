@@ -27,6 +27,25 @@ class CreateInvoiceRequest(BaseModel):
     note: str | None = Field(None, max_length=1000)
 ```
 
+### Validate numeric bounds against the DB column, not just `> 0`
+A money field zod-validated only as `.positive()` still 500s (raw DB numeric-overflow) on a value
+past the column's precision. Bound it to the column ceiling — `Decimal(10,2)` → `.max(99_999_999.99)`
+— so an oversized amount is a clean 422, not an internal error. Same idea for string length vs.
+`VarChar(n)` and page `limit` vs. a sane max.
+
+### Pagination cursors are IDOR surface (Prisma keyset)
+A `?cursor=<id>` param is request-controlled input pointing at a row. Prisma resolves the cursor row
+by primary key **before** the query's `where` filter runs, so a cursor referencing another user's
+row (or a non-existent id) behaves differently from an owned one — a faint existence oracle, and an
+unparseable one 500s at the DB layer. Ownership-gate the cursor before handing it to `findMany`;
+treat not-owned/not-found as an empty page, never an error:
+```ts
+if (cursor) {
+  const owned = await db.expense.findFirst({ where: { id: cursor, userId }, select: { id: true } })
+  if (!owned) return { data: [], nextCursor: null }
+}
+```
+
 ### Fixed-point sanitization for free-text fields (not just shape validation)
 Validating a field's *shape* (zod/pydantic above) is separate from sanitizing its *content* when
 that content will be re-embedded somewhere else (HTML, a prompt, a shell command). A single-pass

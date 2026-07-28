@@ -85,6 +85,15 @@ when the async sibling is loading, erroring, or unavailable. Real example:
 with plain rules from props the page already loaded). Give the fallback its own distinct
 heading/copy — see `design-system`'s note on distinguishing alternate views of the same data.
 
+**A client panel that mutates *and* shows server-computed figures.** When a `"use client"` panel
+does CRUD via `fetch('/api/...')` while also displaying a server-computed summary the page rendered
+(totals, net figures): pass the summary in as a prop, keep the interactive list in client state, and
+after each mutation refetch the affected list page *and* call `router.refresh()` (the server
+recomputes and re-passes the summary prop). Guard the refetch/filter/load-more fetches against
+out-of-order responses with a monotonic request token, or a stale response can resurrect a
+just-deleted row — see the `nextjs` skill's "Client mutations + RSC reconciliation" for the exact
+pattern, and `components/dashboard/expenses-panel.tsx` for the working reference.
+
 ---
 
 ## File Structure
@@ -249,6 +258,9 @@ export function InvoiceForm() {
         inputMode="decimal"
         value={amount}
         onChange={(event) => setAmount(event.target.value)}
+        // wire the error to the field for screen readers — not just a visual message
+        aria-invalid={error ? true : undefined}
+        aria-describedby={error ? 'amount-error' : undefined}
         className={cn(
           'mt-1 w-full rounded-lg border border-hairline bg-canvas px-3 py-2 text-ink',
           'outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-focus',
@@ -256,7 +268,7 @@ export function InvoiceForm() {
       />
       {/* inline field error — not just a top banner */}
       {error ? (
-        <p role="alert" className="mt-1 text-(length:--type-caption-size) text-danger">
+        <p id="amount-error" role="alert" className="mt-1 text-(length:--type-caption-size) text-danger">
           {error}
         </p>
       ) : null}
@@ -272,8 +284,23 @@ export function InvoiceForm() {
 - `noValidate` on `<form>` — zod controls all messages.
 - Disable submit while the request is pending (a `pending` state) — no double-submit. This repo has
   no react-hook-form/@hookform; forms are plain zod `safeParse` + controlled inputs.
-- Inline field-level errors beneath each input.
-- Match client zod schema to server zod schema exactly.
+- Inline field-level errors beneath each input, wired to the field via `aria-invalid` +
+  `aria-describedby={errorId}`; on a failed submit, move focus to the first invalid field (don't
+  leave focus on the submit button with only a visual cue). Real example:
+  `components/dashboard/expense-form-dialog.tsx`.
+- Match client zod schema to server zod schema exactly — and surface the server's `422`
+  `error.fields` back onto the same per-field slots, since the server is the source of truth.
+- Reset form state on (re)open by remounting with a `key` (initialize `useState` from props), not a
+  `useEffect` that calls `setState` — the repo lints `react-hooks/set-state-in-effect`.
+
+## Modal / Dialog
+Use the shared `components/ui/dialog.tsx` primitive — never hand-roll a modal. It owns the a11y
+contract (`role="dialog"` + `aria-modal`, labelled title, Escape-to-close, Tab focus trap, initial
+focus moved in, focus restored to the trigger on close, body-scroll lock) and renders through a
+portal. Put the feature form inside it as children; because it unmounts its children when closed,
+a `key` on the form gives you a fresh reset per open for free. Don't add a blur/glass backdrop
+(banned by `design-system`) — the scrim is a plain wash on the same element that handles the
+close click.
 
 ---
 
@@ -299,5 +326,8 @@ export function InvoiceForm() {
 - [ ] Focus outline on all interactive elements (`outline-*`, never `ring-*`)
 - [ ] No hardcoded hex colors — CSS vars or Tailwind tokens only
 - [ ] Mobile layout works at 375px
-- [ ] Forms: `noValidate`, inline errors, disabled while submitting
+- [ ] Forms: `noValidate`, inline errors wired via `aria-invalid`/`aria-describedby`, focus moved
+      to first invalid field on failed submit, server `422` field errors surfaced, disabled while
+      submitting
+- [ ] Modals use `components/ui/dialog.tsx` (never a hand-rolled modal)
 - [ ] Passes the `engineering-standards` Definition of Done
