@@ -4,8 +4,13 @@ import { currentUser } from "@clerk/nextjs/server";
 import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 import { OverviewPanel } from "@/components/dashboard/overview-panel";
 import { CalculatorsPanel } from "@/components/dashboard/calculators-panel";
+import { ExpensesPanel } from "@/components/dashboard/expenses-panel";
 import { ReportPanel } from "@/components/dashboard/report-panel";
 import { getUserConnections, computeDashboardStats } from "@/lib/dashboard-data";
+import { listExpensesForUser, getExpenseSummaryForUser } from "@/lib/expense-data";
+import { computeExpenseSummary, type ExpenseSummary } from "@/lib/expense-calculators";
+import { computeIncomeProjection } from "@/lib/income-calculators";
+import { DEFAULT_PAGE_SIZE, type ExpenseDto } from "@/lib/expenses";
 import {
   getInternalUserId,
   getLastReportValidUntil,
@@ -36,6 +41,24 @@ export default async function DashboardPage() {
       ])
     : [[], null];
 
+  // Expenses tab: verified gross income feeds the net-income math; the summary is a trailing-12-month
+  // rollup and the list is the first keyset page. Gross figures come from the shared income
+  // projection (null before any verified income → treated as 0) rather than re-inlining the
+  // annualization formula here. A user with no User row yet has no expenses, so we skip the DB
+  // round-trips and hand the panel a zeroed summary.
+  const incomeProjection = computeIncomeProjection(stats, connections);
+  const expenseIncomeContext = {
+    averageMonthlyGross: incomeProjection?.averageMonthly ?? 0,
+    annualizedGross: incomeProjection?.annualizedIncome ?? 0,
+  };
+  const [expensePage, expenseSummary]: [{ expenses: ExpenseDto[]; nextCursor: string | null }, ExpenseSummary] =
+    internalUserId
+      ? await Promise.all([
+          listExpensesForUser(internalUserId, { limit: DEFAULT_PAGE_SIZE }),
+          getExpenseSummaryForUser(internalUserId, expenseIncomeContext),
+        ])
+      : [{ expenses: [], nextCursor: null }, computeExpenseSummary([], expenseIncomeContext)];
+
   return (
     <main className="min-h-screen bg-gradient-flow-light px-6 py-16">
       <div className="mx-auto max-w-grid text-center">
@@ -55,6 +78,13 @@ export default async function DashboardPage() {
             />
           }
           calculators={<CalculatorsPanel stats={stats} connections={connections} />}
+          expenses={
+            <ExpensesPanel
+              initialExpenses={expensePage.expenses}
+              initialNextCursor={expensePage.nextCursor}
+              summary={expenseSummary}
+            />
+          }
           report={
             <ReportPanel
               hasConnections={connections.length > 0}

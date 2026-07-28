@@ -25,6 +25,7 @@ model User {
   platformConnections PlatformConnection[]
   incomeNarrative     IncomeNarrative?
   reportJobs          ReportJob[]
+  expenses            Expense[]
 
   @@index([clerkId])
 }
@@ -133,4 +134,44 @@ model ReportJob {
   // by createdAt desc — an index-only scan instead of a post-scan sort on two hot paths (report
   // creation gate + every dashboard load).
   @@index([userId, status, createdAt(sort: Desc)])
+}
+
+// A self-employed/gig user's tracked business expense, used by the dashboard's "Expenses" tab to
+// derive net (after-expense) income and an estimated deductible total. Complements
+// PlatformConnection's *gross* verified income — nothing here ever feeds the verification pipeline;
+// every figure built from it is an informational planning estimate, not a tax filing (see
+// lib/expense-calculators.ts). Amounts are Decimal (never Float) so cents never drift. Soft-deleted
+// via `deletedAt` (matching the schema-wide convention) so a removed row can't resurface in totals
+// but history is never hard-destroyed. `date` is the user-chosen date the expense occurred (what
+// monthly grouping keys on), distinct from `createdAt` (when the row was written).
+model Expense {
+  id         String          @id @default(cuid())
+  userId     String
+  user       User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amount     Decimal         @db.Decimal(10, 2)
+  category   ExpenseCategory
+  date       DateTime        @db.Timestamptz(3)
+  note       String?         @db.VarChar(280)
+  // Whether the user considers this expense tax-deductible. Defaults true (most tracked business
+  // expenses are), user-overridable per row; drives the "estimated deductible total".
+  deductible Boolean         @default(true)
+  createdAt  DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime        @updatedAt @db.Timestamptz(3)
+  deletedAt  DateTime?       @db.Timestamptz(3)
+
+  // Serves the only list query: a per-user, not-soft-deleted scan ordered by `date` desc (keyset
+  // paginated). `deletedAt` sits in the key so the `deletedAt IS NULL` filter is covered rather
+  // than applied as a post-scan filter. Category filtering is an additional predicate on top.
+  @@index([userId, deletedAt, date(sort: Desc)])
+}
+
+// Common gig/self-employed expense buckets. Enum (never a raw string) so the value set is fixed and
+// type-safe end to end; labels for display live in lib/expenses.ts, never in the DB.
+enum ExpenseCategory {
+  VEHICLE_MILEAGE
+  SUPPLIES
+  PLATFORM_FEES
+  PHONE_INTERNET
+  HOME_OFFICE
+  OTHER
 }
