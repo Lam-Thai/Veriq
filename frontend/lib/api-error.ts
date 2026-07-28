@@ -10,6 +10,8 @@ import { ZodError } from "zod";
 export const ApiError = {
   unauthorized: () =>
     NextResponse.json({ error: { code: "UNAUTHORIZED", message: "Authentication required" } }, { status: 401 }),
+  badRequest: (message = "Malformed request") =>
+    NextResponse.json({ error: { code: "BAD_REQUEST", message } }, { status: 400 }),
   notFound: () => NextResponse.json({ error: { code: "NOT_FOUND", message: "Not found" } }, { status: 404 }),
   conflict: (code: string, message: string) => NextResponse.json({ error: { code, message } }, { status: 409 }),
   // `retryAfterSeconds` should come from the rate limiter's own `resetAt` (see lib/rate-limit.ts)

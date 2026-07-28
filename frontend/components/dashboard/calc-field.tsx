@@ -15,6 +15,8 @@ type CalcFieldProps = {
   max?: number;
   step?: number;
   hint?: string;
+  /** id of a validation-error element to wire via aria-describedby; also flips aria-invalid on. */
+  errorId?: string | undefined;
 };
 
 /**
@@ -35,6 +37,7 @@ export function CalcField({
   max,
   step,
   hint,
+  errorId,
 }: CalcFieldProps) {
   return (
     <div>
@@ -57,6 +60,8 @@ export function CalcField({
           step={step}
           value={value}
           onChange={(event) => onChange(event.target.value)}
+          aria-invalid={errorId ? true : undefined}
+          aria-describedby={errorId}
           className={cn(
             "w-full bg-transparent text-(length:--type-body-size) font-semibold text-ink outline-none",
             "[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none",

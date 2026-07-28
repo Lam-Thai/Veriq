@@ -62,6 +62,23 @@ type UserId = string & { readonly _brand: 'UserId' }
 type InvoiceId = string & { readonly _brand: 'InvoiceId' }
 ```
 
+### `exactOptionalPropertyTypes` — `?:` is not the same as `| undefined`
+This repo has `exactOptionalPropertyTypes: true`, so a property declared `foo?: string` accepts
+"absent" but **rejects an explicit `undefined` value**. Passing a `string | undefined` expression
+(a zod-`.optional()` field, another optional prop, `map.get()`, `searchParams.get() ?? undefined`)
+into a `foo?: string` slot fails to compile. When a value that may be `undefined` is forwarded, type
+the receiving optional as `| undefined` explicitly:
+```ts
+// ✗ TS2375 under exactOptionalPropertyTypes when `errors` can be undefined
+type Props = { errors?: string[] }
+// ✓ accepts both "absent" and an explicit undefined value
+type Props = { errors?: string[] | undefined }
+// same for function params that receive a possibly-undefined optional:
+function list(opts: { category?: Category | undefined; limit: number }) { /* ... */ }
+```
+Don't "fix" this by stripping the value with `!` or a cast — widen the target type, or omit the key
+entirely (build the object conditionally) so it's genuinely absent rather than `undefined`.
+
 ## Rules
 - `any` only with a comment: `// any: zod validates at runtime`
 - `as T` only when narrowing is impossible and you can prove correctness

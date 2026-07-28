@@ -140,11 +140,35 @@ try {
 Common codes: `P2002` unique violation · `P2025` record not found · `P2003` FK violation
 
 ## Migration Commands
+Prisma is a local dev-dependency here, **not** a global binary — a bare `prisma ...` fails with
+`prisma: command not found`. Always invoke it through `npx` (or the `package.json` script alias):
 ```bash
-prisma migrate dev --name <description>   # development
-prisma migrate deploy                      # CI/CD — never migrate dev in prod
-prisma db seed                             # run seed script
+npx prisma migrate dev --name <description>   # development (also: npm run db:migrate)
+npx prisma migrate deploy                      # CI/CD & applying to a real DB — never migrate dev in prod
+npx prisma generate                            # regenerate the client (offline; no DB needed)
+npx prisma db seed                             # run seed script
 ```
+When the dashboard/page-load path queries a table (e.g. an RSC `await db.x.findMany()`), the
+migration that creates that table is a **hard prerequisite** — until it's applied, the query throws
+`PrismaClientKnownRequestError` and 500s the whole page, not just the feature. Apply the migration
+(`npx prisma migrate deploy`) before/with the code deploy, and tell the user that command explicitly
+when they're blocked; never silently run DDL against their real database on their behalf.
+
+### Generating a migration with no database reachable
+`prisma migrate dev` needs a live DB (and `migrate diff --from-migrations` needs a
+`shadowDatabaseUrl`). On a dev box with no DB, generate the SQL **offline** by diffing the previous
+committed schema against the new one, then drop it into a correctly-named migration folder:
+```bash
+git show HEAD:frontend/prisma/schema.prisma > /tmp/old.prisma           # previous schema
+npx prisma migrate diff --from-schema /tmp/old.prisma \
+  --to-schema ./prisma/schema.prisma --script > migration.sql            # additive DDL, offline
+```
+Notes: Prisma 7 renamed the flag `--to-schema-datamodel` → `--to-schema`. A `dotenvx`/env-loader
+banner can leak onto stdout into the redirected file — check the file's first line is real SQL and
+strip any banner. Place the result at `prisma/migrations/<UTCtimestamp>_<name>/migration.sql`; a
+freshly-generated, never-applied file is fine to write by hand (the "never hand-edit" rule below is
+only about migrations already applied to a real DB). Then `npx prisma generate` so the client types
+pick up the new model before you typecheck.
 
 **Never hand-edit a `migration.sql` file that has already been applied to any real database**
 (even just a local dev DB) — Prisma tracks applied migrations by a checksum of the file content

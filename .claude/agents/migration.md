@@ -50,10 +50,19 @@ ask what you can reasonably infer.
 1. Classify the migration: additive (safe) or destructive (needs a plan).
 2. For destructive: design a multi-step deployment sequence.
 3. Update `prisma/schema.prisma`.
-4. Generate and **review the SQL** before applying.
+4. Generate and **review the SQL** before applying. No DB reachable on this machine? Generate it
+   offline — see the `prisma` skill's "Generating a migration with no database reachable"
+   (`prisma migrate diff --from-schema <old> --to-schema <new> --script`). Invoke Prisma via
+   `npx` — it's a local dev-dependency, not a global binary.
 5. Write a backfill script if existing rows need updating.
-6. Update the SQLAlchemy mirror model to match.
+6. Update the SQLAlchemy mirror model — **only if FastAPI actually reads this table** (see below).
 7. Write the rollback plan.
+
+**Deploy ordering for a new page-load dependency.** If application code will query the new table on
+a hot path (an RSC page-load `db.x.findMany()`, not just an on-demand API route), the migration is a
+**hard prerequisite**: until it's applied, that query throws and 500s the whole page. Sequence the
+migration to land before/with the code, and when a user is blocked on it, hand them the exact
+command (`npx prisma migrate deploy`) rather than running DDL against their real database yourself.
 
 ---
 
@@ -181,15 +190,22 @@ run()
 
 ---
 
-## After Every Migration: Update SQLAlchemy Mirror
+## After Every Migration: Update the SQLAlchemy Mirror — *only if one exists*
 
+**First check whether FastAPI actually reads this table.** The backend's SQLAlchemy layer is
+partly aspirational — as of this writing `backend/app/` has no `models/` package and reads no
+Prisma tables (only a health route). `grep -r "class .*Base" backend/app` / look for a `models/`
+dir before touching anything. If the backend does **not** read the table, there is **no mirror to
+update** — skip it; do not scaffold a `models/` layer that doesn't exist yet just to "mirror" a
+table nothing on the Python side queries. (The issue/spec's "mirror in SQLAlchemy *if FastAPI reads
+it*" wording is deliberate — honor the condition.)
+
+When a mirror model *does* exist, it must reflect the live schema — FastAPI breaks on startup if it
+references columns that don't exist (or vice versa):
 ```python
 # app/models/invoice.py — add the new column to match Prisma
 plan_type: Mapped[str] = mapped_column(String, nullable=False, server_default="free")
 ```
-
-The SQLAlchemy model must always reflect the live schema. FastAPI will break on startup
-if the model references columns that don't exist (or vice versa).
 
 ---
 

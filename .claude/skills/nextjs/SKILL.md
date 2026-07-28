@@ -142,6 +142,38 @@ Notes:
 - Don't build this for work that's merely inconvenient to await — it's for genuinely heavy work
   that would otherwise tie up a request/serverless invocation for its full duration.
 
+## New dynamic route? Regenerate route types before typechecking
+`RouteContext<'/api/x/[id]'>` (and other typed-route helpers) resolve against types Next.js
+generates into `.next/types`. A brand-new route file won't be in there yet, so a standalone
+`npx tsc --noEmit` fails with `does not satisfy the constraint 'AppRouteHandlerRoutes'` and
+`ctx.params` typed as `unknown` — even though the code is correct. Run `npx next typegen` (or a full
+`next build`, which regenerates them) after adding/renaming a route, then typecheck.
+
+## Client mutations + RSC reconciliation
+Prefer a Server Action or an RSC fetch (see Rules). When a feature genuinely needs a `"use client"`
+panel that mutates via `fetch('/api/...')` **and** shows server-computed figures the page rendered
+(totals, a summary), the clean split is: pass the server-computed data in as a prop, keep the
+interactive list in client state, and after each mutation do both — refetch the affected list page
+*and* call `router.refresh()` so the server recomputes and re-passes its prop. Two hazards:
+
+- **Out-of-order responses.** Multiple in-flight fetches (rapid filter switches, a delete landing
+  while "load more" is pending) can resolve out of order and a stale response can clobber fresher
+  state — e.g. a just-deleted row reappearing. Guard with a monotonic request token; only the latest
+  applies its result:
+  ```ts
+  const seqRef = useRef(0)
+  async function reload() {
+    const seq = ++seqRef.current
+    const next = await fetchPage(...)
+    if (seq !== seqRef.current) return   // a newer request superseded this one
+    setRows(next)
+  }
+  ```
+- **`react-hooks/set-state-in-effect` (lint error here).** Don't sync state in a `useEffect` body.
+  To reset a form when a dialog opens, remount it with a `key` (initialize `useState` from props) —
+  see `components/dashboard/expense-form-dialog.tsx`. For a portal "mounted" flag, prefer a
+  `typeof document === 'undefined'` render guard over a `useEffect(() => setMounted(true))`.
+
 ## Security Headers (next.config.ts)
 ```ts
 const securityHeaders = [
