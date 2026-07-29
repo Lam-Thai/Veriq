@@ -283,9 +283,20 @@ test('user creates and sends an invoice', async ({ page }) => {
 The checklist below is the bar. When a box genuinely can't be ticked with the harness that exists
 (see Repo Reality), the correct output is to **name it explicitly in your summary** — which case,
 what infra it needs — not to quietly drop it or substitute a weaker test that appears to cover it.
-An honest "IDOR, cap-enforcement, and rate-limit cases need a test DB + Clerk test session, none of
-which exist" is far more useful than a green suite that never exercised those paths, because the
-green suite actively misleads the next reviewer.
+An honest "IDOR and cap-enforcement cases need a test DB + Clerk test session, neither of which
+exists" is far more useful than a green suite that never exercised those paths, because the green
+suite actively misleads the next reviewer.
+
+**But be precise about *which* infra each case actually needs — over-claiming a blocker is its own
+failure.** These are three different situations, not one:
+- **Authenticated + DB** (IDOR on a share, cap-of-10 enforcement): genuinely needs both a Clerk
+  test session and a real Postgres row. Report as blocked.
+- **Public + DB** (a real active/expired/revoked `/verify/[token]` render): needs Postgres, but
+  **no** Clerk session — the route is unauthenticated. Don't cite a session as the blocker.
+- **Public + no DB** (the IP-keyed pre-lookup rate limit on `/verify/[token]` and its download
+  route): needs *neither*. The limiter fires before any query, so hammering the route past its
+  window returns 429 with nothing seeded. This is testable today — write it rather than filing it
+  under "blocked on infra".
 
 ## Audit Checklist
 - [ ] Happy path covered

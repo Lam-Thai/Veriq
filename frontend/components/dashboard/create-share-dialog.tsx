@@ -109,8 +109,12 @@ function CreateShareForm({ reportJobId, maxShareExpiryDays, onClose, onCreated }
       return null;
     }
     const now = new Date().getTime();
-    if (parsed.getTime() <= now) {
-      setCustomError("Expiry must be in the future");
+    // Matches the `min` attribute on the datetime-local input (minCustom above). The browser's own
+    // min only constrains the picker UI — a typed or pasted value still reaches here, and the
+    // server only enforces "in the future", so without this floor a 2-minute link would be
+    // accepted despite the documented one-hour minimum.
+    if (parsed.getTime() < now + HOUR_MS) {
+      setCustomError("Expiry must be at least 1 hour from now");
       return null;
     }
     if (parsed.getTime() > now + maxShareExpiryDays * DAY_MS) {

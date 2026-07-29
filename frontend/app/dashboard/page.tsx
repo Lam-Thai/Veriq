@@ -58,19 +58,24 @@ export default async function DashboardPage() {
     averageMonthlyGross: incomeProjection?.averageMonthly ?? 0,
     annualizedGross: incomeProjection?.annualizedIncome ?? 0,
   };
-  const [expensePage, expenseSummary]: [{ expenses: ExpenseDto[]; nextCursor: string | null }, ExpenseSummary] =
-    internalUserId
-      ? await Promise.all([
-          listExpensesForUser(internalUserId, { limit: DEFAULT_PAGE_SIZE }),
-          getExpenseSummaryForUser(internalUserId, expenseIncomeContext),
-        ])
-      : [{ expenses: [], nextCursor: null }, computeExpenseSummary([], expenseIncomeContext)];
+  // Shares are fetched alongside the expense queries rather than after them — they're independent,
+  // so awaiting separately would add a serial DB round-trip to every dashboard render.
+  const [expensePage, expenseSummary, initialShares]: [
+    { expenses: ExpenseDto[]; nextCursor: string | null },
+    ExpenseSummary,
+    ReportShareDto[],
+  ] = internalUserId
+    ? await Promise.all([
+        listExpensesForUser(internalUserId, { limit: DEFAULT_PAGE_SIZE }),
+        getExpenseSummaryForUser(internalUserId, expenseIncomeContext),
+        listSharesForUser(internalUserId),
+      ])
+    : [{ expenses: [], nextCursor: null }, computeExpenseSummary([], expenseIncomeContext), []];
 
   // Sharing tab: new links always point at the most recent READY report job. reportHistory is
   // already newest-first (getReportHistoryForUser), so the first READY entry is it — no separate
   // query needed. A user with no User row yet has neither a report nor any shares.
   const latestReadyReportJobId = reportHistory.find((entry) => entry.status === "READY")?.id ?? null;
-  const initialShares: ReportShareDto[] = internalUserId ? await listSharesForUser(internalUserId) : [];
 
   return (
     <main className="min-h-screen bg-gradient-flow-light px-6 py-16">

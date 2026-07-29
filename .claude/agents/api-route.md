@@ -184,8 +184,18 @@ before merging one.
   page that linked it stopped working. Collapse all of them to one `ApiError.notFound()` in an API
   route; a page may show distinct friendly expired/revoked copy, but never anything identifying
   the owner or the underlying resource.
-- **Rate limit keyed on the token**, not a user id (there isn't one) and not an IP:
-  `` checkRateLimit(`verify-download:${token}`, 20, 60_000) ``.
+- **Never key the rate limiter on the raw token** — key on a *bounded* value instead, in two
+  stages. `checkRateLimit` is an in-process `Map`, so keying it on unbounded caller-supplied input
+  is itself a memory-growth vector (one entry per distinct token tried), it parks the raw
+  credential in a long-lived server structure, and it gives no protection against the actual abuse
+  shape, since every fresh token gets a fresh bucket:
+  ```ts
+  // 1. Before the DB lookup — keyed on the caller, bounds enumeration.
+  checkRateLimit(`verify-lookup-ip:${clientIpFromHeaders(h) ?? "unknown"}`, 30, 60_000)
+  // 2. After the share resolves — keyed on its id, bounds hammering one real link.
+  checkRateLimit(`verify-download:${share.id}`, 20, 60_000)
+  ```
+  See `app/api/verify/[token]/download/route.ts` and `app/verify/[token]/page.tsx` for both stages.
 - **Never log the token** or a URL containing it — log internal ids only.
 
 ## Non-Negotiable Rules
@@ -201,10 +211,14 @@ before merging one.
   role) — validate against a closed enum and resolve the real value server-side.
 
 ## Audit Checklist
-- [ ] Auth check is first line of every handler (webhook routes: signature check is)
+- [ ] The handler's first security check runs before any other logic — `currentUser()` for a
+      session route, signature verification for a webhook, token shape-check + hashed lookup for a
+      token-gated public route. One of the three, always first
 - [ ] `safeParse` used, not `parse`
-- [ ] Rate limiting applied (`checkRateLimit` from `lib/rate-limit.ts`, keyed per `userId`) if
-      this route is a plausible abuse target
+- [ ] Rate limiting applied (`checkRateLimit` from `lib/rate-limit.ts`) if this route is a
+      plausible abuse target, keyed per `userId` — or, on a public route where no user exists, on
+      a bounded value (client IP pre-lookup, resolved resource id post-lookup). Never on a raw
+      caller-supplied token
 - [ ] Logging uses `loggerFor(requestId)` from `lib/logger.ts`, not a new `console.*` call
 - [ ] Anything genuinely CPU/latency-heavy (>500ms) and Node-only is backgrounded via the
       `after()` job pattern (see `app/api/report/route.tsx`), not run inline

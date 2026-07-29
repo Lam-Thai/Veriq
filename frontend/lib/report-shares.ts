@@ -16,6 +16,9 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 export const MAX_ACTIVE_SHARES_PER_REPORT = 10;
 export const MAX_SHARE_EXPIRY_DAYS = 90;
 
+/** Mirrors `ReportShareView.userAgent`'s `@db.VarChar(300)` — see recordView. */
+const MAX_USER_AGENT_LENGTH = 300;
+
 /**
  * Validates a share-creation request: `reportJobId` must be a real cuid (existence/ownership/
  * READY-status are re-checked server-side in `createShareIfAllowed`, not here — this schema only
@@ -23,7 +26,9 @@ export const MAX_SHARE_EXPIRY_DAYS = 90;
  */
 export const createShareSchema = z
   .object({
-    reportJobId: z.string().cuid(),
+    // Zod 4 moved string formats to top-level validators; the chained `.cuid()` is deprecated.
+    // Matches the `z.url()` usage already in lib/env.ts.
+    reportJobId: z.cuid(),
     expiresAt: z.coerce.date(),
   })
   .refine((body) => body.expiresAt.getTime() > Date.now(), {
@@ -161,7 +166,15 @@ export async function getShareByToken(rawToken: string) {
   const tokenHash = hashShareToken(rawToken);
   return db.reportShare.findUnique({
     where: { tokenHash },
-    include: {
+    // Explicit top-level `select`, not `include` — `include` returns every scalar on ReportShare,
+    // which would put `tokenHash` (the stored credential) and `userId` into an object handled on
+    // the app's only unauthenticated code path. Nothing serializes this object today, but listing
+    // fields explicitly means a future `NextResponse.json({ data: share })` can't leak either one.
+    select: {
+      id: true,
+      reportJobId: true,
+      expiresAt: true,
+      revokedAt: true,
       reportJob: { select: { createdAt: true, platformsParam: true } },
       user: { select: { email: true } },
     },
@@ -181,19 +194,56 @@ export async function getReportPdfForShare(reportJobId: string) {
   });
 }
 
+/** Default/maximum page size for the view log — bounds an unbounded, append-only table. */
+export const VIEW_LOG_PAGE_SIZE = 50;
+
 /**
  * Owner-scoped view log for one share — `null` (never an empty array) when the share doesn't
  * exist or isn't owned by `userId`, so the API route can return a 404 rather than an empty-but-
  * real list, matching the rest of the app's ownership-check convention.
+ *
+ * Keyset-paginated (same shape as lib/expenses.ts): `ReportShareView` is append-only and grows
+ * without limit for a widely-circulated link, so returning every row would put an unbounded
+ * response on a hot dashboard path. Ordering carries a unique `id` tiebreaker so the cursor is
+ * deterministic when several views share a `viewedAt` timestamp. The cursor is not IDOR surface
+ * here the way the expenses cursor is: `where` stays pinned to this already-ownership-checked
+ * `reportShareId`, so a cursor pointing at another share's row can only shift the window, never
+ * return a row from it.
  */
-export async function getViewsForShare(userId: string, shareId: string) {
+export async function getViewsForShare(
+  userId: string,
+  shareId: string,
+  options: { limit?: number | undefined; cursor?: string | undefined } = {},
+) {
   const share = await db.reportShare.findFirst({ where: { id: shareId, userId }, select: { id: true } });
   if (!share) return null;
 
-  return db.reportShareView.findMany({
+  // Scope-gate the cursor before handing it to Prisma, mirroring listExpensesForUser: Prisma
+  // resolves a cursor row by primary key *before* the `where` filter applies, so a foreign or
+  // garbage id would otherwise silently shift the window (or 500 at the DB layer). An unusable
+  // cursor is an empty page, never an error.
+  if (options.cursor) {
+    const owned = await db.reportShareView.findFirst({
+      where: { id: options.cursor, reportShareId: shareId },
+      select: { id: true },
+    });
+    if (!owned) return { views: [], nextCursor: null };
+  }
+
+  const limit = Math.min(Math.max(options.limit ?? VIEW_LOG_PAGE_SIZE, 1), VIEW_LOG_PAGE_SIZE);
+
+  // take: limit + 1 is a has-more probe — the extra row is sliced off before returning.
+  const rows = await db.reportShareView.findMany({
     where: { reportShareId: shareId },
-    orderBy: { viewedAt: "desc" },
+    orderBy: [{ viewedAt: "desc" }, { id: "desc" }],
+    take: limit + 1,
+    ...(options.cursor ? { cursor: { id: options.cursor }, skip: 1 } : {}),
+    select: { id: true, viewedAt: true, ipHash: true, userAgent: true },
   });
+
+  const hasMore = rows.length > limit;
+  const views = hasMore ? rows.slice(0, limit) : rows;
+  return { views, nextCursor: hasMore ? (views[views.length - 1]?.id ?? null) : null };
 }
 
 /**
@@ -213,7 +263,11 @@ export async function recordView(
 ): Promise<{ isFirstView: boolean }> {
   return db.$transaction(async (tx) => {
     await tx.reportShareView.create({
-      data: { reportShareId: shareId, ipHash, userAgent },
+      // Truncated to the column's VarChar(300): User-Agent is attacker-controlled and has no
+      // protocol length limit, so an over-long header would raise Postgres 22001 and abort the
+      // whole transaction — meaning a crafted request could silently suppress its own view being
+      // logged. Truncating keeps the record; null stays null (no UA header sent).
+      data: { reportShareId: shareId, ipHash, userAgent: userAgent?.slice(0, MAX_USER_AGENT_LENGTH) ?? null },
     });
 
     const { count } = await tx.reportShare.updateMany({

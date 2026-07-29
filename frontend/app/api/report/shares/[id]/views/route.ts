@@ -18,7 +18,7 @@ const RATE_LIMIT_WINDOW_MS = 60_000;
  * Sharing tab. `ipHash` is an opaque, already-coarsened+salted sha256 digest (see lib/ip-privacy.ts)
  * — returned as-is, never further processed here, since it carries no recoverable location.
  */
-export async function GET(_request: Request, ctx: RouteContext<"/api/report/shares/[id]/views">) {
+export async function GET(request: Request, ctx: RouteContext<"/api/report/shares/[id]/views">) {
   const requestId = (await headers()).get("x-request-id") ?? "unknown";
   const log = loggerFor(requestId);
 
@@ -34,10 +34,18 @@ export async function GET(_request: Request, ctx: RouteContext<"/api/report/shar
     if (!userId) return ApiError.notFound();
 
     const { id } = await ctx.params;
-    const views = await getViewsForShare(userId, id);
-    if (views === null) return ApiError.notFound();
 
-    return NextResponse.json({ data: views });
+    // Keyset pagination, same envelope shape as GET /api/expenses. `limit` is clamped inside
+    // getViewsForShare rather than trusted raw; an absent/garbage value falls back to the default.
+    const url = new URL(request.url);
+    const limitParam = Number(url.searchParams.get("limit"));
+    const page = await getViewsForShare(userId, id, {
+      limit: Number.isFinite(limitParam) && limitParam > 0 ? limitParam : undefined,
+      cursor: url.searchParams.get("cursor") ?? undefined,
+    });
+    if (page === null) return ApiError.notFound();
+
+    return NextResponse.json({ data: page.views, meta: { nextCursor: page.nextCursor } });
   } catch (err) {
     log.error({ err }, "[shares] list views failed");
     return ApiError.internal();

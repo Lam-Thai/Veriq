@@ -432,11 +432,29 @@ the log needs it human-readable), but can never show a location. Don't let a UI 
 
 ### Rate-limit keys when there is no user
 The "key per `userId`, never per IP" rule assumes a session exists — it's about not substituting a
-spoofable IP for *real available identity*. On a genuinely public route there is no user id, and
-the bearer token is the closest available identity: key on the token
-(`` checkRateLimit(`verify-download:${token}`, 20, 60_000) ``). That throttles hammering of one
-link, which is the actual abuse shape. (FastAPI's `rate_limit_key` encodes the same precedence —
-verified JWT `sub` first, `get_remote_address` only as a fallback.)
+spoofable IP for *real available identity*. On a genuinely public route there is no user id, so the
+rule needs replacing rather than bending. The key must be **bounded**, and the raw bearer token is
+not: `checkRateLimit` is an in-process `Map`, so keying on caller-supplied input lets anyone grow it
+without limit (one entry per token tried), parks the credential in a long-lived structure, and
+stops nothing — each fresh token gets a fresh bucket, which is exactly the enumeration shape you
+were trying to throttle.
+
+Use two stages, keyed on values you control:
+```ts
+// 1. Pre-lookup — bounded by real network sources, and it runs before any DB work.
+//    Transient in-memory only; never logged, never persisted (see hashCoarseIp for storage).
+const ip = clientIpFromHeaders(requestHeaders) ?? "unknown"
+if (!checkRateLimit(`verify-lookup-ip:${ip}`, 30, 60_000).success) return ApiError.tooManyRequests(...)
+
+const share = await getShareByToken(token)          // ...resolve + expiry/revocation checks...
+
+// 2. Post-lookup — the resolved id is bounded (one per real row) and isn't a secret.
+if (!checkRateLimit(`verify-download:${share.id}`, 20, 60_000).success) return ApiError.tooManyRequests(...)
+```
+Stage 1 is the one that's easy to omit and the one that matters most: without it the token lookup
+is completely unthrottled, and a well-formed-but-nonexistent token sails past the shape regex
+straight into the database. (FastAPI's `rate_limit_key` encodes the same precedence — verified JWT
+`sub` first, `get_remote_address` only as a fallback.)
 
 ### An RSC page that writes to the DB is an endpoint, not just a render
 A Server Component doing `await recordView(...)` on render is a write path reachable by anyone with

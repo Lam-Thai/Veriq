@@ -11,9 +11,15 @@ import { PillButton } from "@/components/ui/pill-button";
 import { DocumentIcon } from "@/components/ui/icons";
 import { loggerFor } from "@/lib/logger";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { clientIpFromHeaders } from "@/lib/ip-privacy";
 
-const VIEW_RATE_LIMIT = 20;
-const VIEW_RATE_LIMIT_WINDOW_MS = 60_000;
+// Neither key is the path-supplied token: checkRateLimit is an in-process Map, so keying it on
+// unbounded caller-controlled input is itself a memory-growth vector, and a per-token bucket does
+// nothing against enumeration (each new token gets a fresh one). See the download route for the
+// same two-stage split.
+const LOOKUP_RATE_LIMIT = 60; // per client IP, gates the DB lookup itself
+const VIEW_RATE_LIMIT = 20; // per resolved share id, gates the write
+const RATE_LIMIT_WINDOW_MS = 60_000;
 
 // This is the app's one public, unauthenticated route — never index it, and never let a search
 // engine surface a live link to someone's income report.
@@ -85,6 +91,30 @@ function TerminalMessage({ title, description }: { title: string; description: s
 export default async function VerifyPage(props: PageProps<"/verify/[token]">) {
   const { token } = await props.params;
 
+  // Headers are read up front because the IP-keyed limit below has to run *before* the DB lookup
+  // it protects — same headers() convention every route handler here uses for the request id.
+  const requestHeaders = await headers();
+  const requestId = requestHeaders.get("x-request-id") ?? "unknown";
+  const log = loggerFor(requestId);
+  const ip = clientIpFromHeaders(requestHeaders);
+
+  // Gates the lookup itself. Without this the token query is entirely unthrottled — the only
+  // thing standing between an unauthenticated caller and unlimited indexed reads is the shape
+  // regex inside getShareByToken, which well-formed-but-nonexistent tokens sail straight past.
+  // Rendered as its own terminal state (no DB touched), and identical for every token, so it
+  // stays free of the enumeration signal the invalid/not-found pair is careful to avoid.
+  const lookupLimit = checkRateLimit(`verify-lookup-ip:${ip ?? "unknown"}`, LOOKUP_RATE_LIMIT, RATE_LIMIT_WINDOW_MS);
+  if (!lookupLimit.success) {
+    return (
+      <VerifyLayout>
+        <TerminalMessage
+          title="Too many requests."
+          description="Please wait a moment and try this link again."
+        />
+      </VerifyLayout>
+    );
+  }
+
   const share = await getShareByToken(token);
 
   if (!share) {
@@ -122,26 +152,15 @@ export default async function VerifyPage(props: PageProps<"/verify/[token]">) {
     );
   }
 
-  // Same header-reading convention every route handler in this app uses for the request-id
-  // (headers() from next/headers, available in RSCs too) — there's no existing precedent for
-  // reading client IP/UA elsewhere in the repo, so this follows the standard reverse-proxy
-  // convention: first entry of a (possibly multi-hop) x-forwarded-for, plain user-agent.
-  const requestHeaders = await headers();
-  const requestId = requestHeaders.get("x-request-id") ?? "unknown";
-  const log = loggerFor(requestId);
-
-  const forwardedFor = requestHeaders.get("x-forwarded-for");
-  const ip = forwardedFor ? (forwardedFor.split(",")[0]?.trim() ?? null) : null;
   const userAgent = requestHeaders.get("user-agent");
   const ipHash = hashCoarseIp(ip);
 
-  // Rate-limited per token (there's no authenticated identity on this route, and the token is
-  // itself the closest available identity — same reasoning as the download route's
-  // `verify-download:${token}` key). This gates the write, not the render: a hammered link still
-  // shows the report (fail open), it just stops growing the view log / re-triggering recordView
-  // once the limit is hit (fail closed), so the log can't be blown up by looping requests against
-  // a single link that's leaked into browser history, a crawler, or a compromised inbox.
-  const { success: viewRateOk } = checkRateLimit(`verify-view:${token}`, VIEW_RATE_LIMIT, VIEW_RATE_LIMIT_WINDOW_MS);
+  // Second stage, now keyed on the resolved share id — a bounded, non-secret value, unlike the
+  // token. This gates the write, not the render: a hammered link still shows the report (fail
+  // open), it just stops growing the view log / re-triggering recordView once the limit is hit
+  // (fail closed), so the log can't be blown up by looping requests against a single link that's
+  // leaked into browser history, a crawler, or a compromised inbox.
+  const { success: viewRateOk } = checkRateLimit(`verify-view:${share.id}`, VIEW_RATE_LIMIT, RATE_LIMIT_WINDOW_MS);
 
   // Best-effort: recording the view (or the first-view email below) must never block rendering
   // the report itself.

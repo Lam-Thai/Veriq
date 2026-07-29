@@ -111,7 +111,10 @@ ask what you can reasonably infer.
 □ No state leaks owner identity/email or which internal resource is attached
 □ Expiry AND revocation re-checked independently in EVERY route, not just the page that
   links them — a bookmarked sub-resource URL must not outlive its parent link
-□ Rate-limited on a key that exists without a session (the token), not userId, not IP
+□ Rate-limited on a key that exists without a session — and that key is BOUNDED, never
+  the raw token. checkRateLimit is an in-process Map: an attacker-supplied token as the
+  key grows it without limit and buys nothing (each new token = a fresh bucket). Expect
+  two stages: client IP before the DB lookup, resolved resource id after it
 □ Page routes emit noindex via route `metadata`, and it's live in rendered HTML — not a
   dead export that got miswired
 □ RSC pages that write to the DB are treated as endpoints: rate-limited, best-effort

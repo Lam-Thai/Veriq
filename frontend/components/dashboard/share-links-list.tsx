@@ -224,6 +224,9 @@ function ShareRow({
             <button
               type="button"
               onClick={onRequestRevoke}
+              // Every row's control reads "Revoke" visually; the created date is what tells them
+              // apart for anyone navigating by a screen reader's list of buttons.
+              aria-label={`Revoke share link created ${DATE_FMT.format(share.createdAt)}`}
               className={cn(
                 "shrink-0 rounded-pill px-3 py-1.5 text-(length:--type-caption-size) font-semibold text-danger",
                 "transition-colors duration-(--duration-fast) hover:bg-danger-surface",
@@ -243,7 +246,7 @@ function ShareRow({
         </p>
       ) : null}
 
-      <ViewLogDisclosure shareId={share.id} />
+      <ViewLogDisclosure shareId={share.id} createdLabel={DATE_FMT.format(share.createdAt)} />
     </li>
   );
 }
@@ -258,7 +261,7 @@ type ViewLogStatus = "idle" | "loading" | "error" | "loaded";
  * variant mirrors the same trigger/aria-expanded/aria-controls/chevron pattern but only mounts the
  * panel body after the first expand, and fetches at that point.
  */
-function ViewLogDisclosure({ shareId }: { shareId: string }) {
+function ViewLogDisclosure({ shareId, createdLabel }: { shareId: string; createdLabel: string }) {
   const [open, setOpen] = useState(false);
   const [status, setStatus] = useState<ViewLogStatus>("idle");
   const [views, setViews] = useState<ShareView[]>([]);
@@ -296,6 +299,9 @@ function ViewLogDisclosure({ shareId }: { shareId: string }) {
         onClick={handleToggle}
         aria-expanded={open}
         aria-controls={panelId}
+        // Same reason as the Revoke button above: "View log" repeats once per row, so the created
+        // date is what disambiguates them in a screen reader's controls list.
+        aria-label={`View log for share link created ${createdLabel}`}
         className={cn(
           "inline-flex items-center gap-1.5 rounded-sm text-(length:--type-fine-print-size) font-medium text-ink-muted-80",
           "transition-[color,transform] duration-(--duration-fast) ease-(--ease-out)",

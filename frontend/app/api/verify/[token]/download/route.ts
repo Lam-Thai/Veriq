@@ -3,16 +3,23 @@ import { headers } from "next/headers";
 import { ApiError } from "@/lib/api-error";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { getShareByToken, getReportPdfForShare } from "@/lib/report-shares";
+import { clientIpFromHeaders } from "@/lib/ip-privacy";
 import { loggerFor } from "@/lib/logger";
 
 // Prisma via the pg driver adapter needs Node APIs — never Edge (same reason as
 // app/api/report/[jobId]/route.ts, which this mirrors).
 export const runtime = "nodejs";
 
-// Keyed by the raw token itself, not a user id — there's no authenticated identity on this public
-// route. Sized well above a legitimate single viewer's needs (one page load + a couple of retries)
-// while still bounding brute-force abuse of any one token.
-const RATE_LIMIT = 20;
+// Two limiters, because there's no authenticated identity here and the two abuse shapes differ.
+//
+// The path-supplied token is deliberately NOT a limiter key. checkRateLimit is an in-process Map:
+// keying it on unbounded caller-controlled input lets anyone grow that Map without limit (one
+// entry per distinct token tried), and it gives no protection against the actual enumeration
+// shape, since every fresh token gets a fresh bucket. It would also park the raw credential in a
+// long-lived server-side structure, which the same reasoning behind hashing it at rest argues
+// against. Both keys below are drawn from a bounded set instead.
+const LOOKUP_RATE_LIMIT = 30; // per client IP, before any DB work — bounds enumeration
+const DOWNLOAD_RATE_LIMIT = 20; // per resolved share id — bounds hammering one real link
 const RATE_LIMIT_WINDOW_MS = 60_000;
 
 /**
@@ -28,17 +35,29 @@ const RATE_LIMIT_WINDOW_MS = 60_000;
  * render already recorded the view for this visit, and calling it again here would double-count.
  */
 export async function GET(_request: Request, ctx: RouteContext<"/api/verify/[token]/download">) {
-  const requestId = (await headers()).get("x-request-id") ?? "unknown";
+  const requestHeaders = await headers();
+  const requestId = requestHeaders.get("x-request-id") ?? "unknown";
   const log = loggerFor(requestId);
 
   const { token } = await ctx.params;
 
-  const { success, resetAt } = checkRateLimit(`verify-download:${token}`, RATE_LIMIT, RATE_LIMIT_WINDOW_MS);
-  if (!success) return ApiError.tooManyRequests(Math.ceil((resetAt - Date.now()) / 1000));
+  // Stage 1 — before any DB work, keyed on the caller rather than on what they supplied.
+  const ipKey = clientIpFromHeaders(requestHeaders) ?? "unknown";
+  const lookupLimit = checkRateLimit(`verify-lookup-ip:${ipKey}`, LOOKUP_RATE_LIMIT, RATE_LIMIT_WINDOW_MS);
+  if (!lookupLimit.success) {
+    return ApiError.tooManyRequests(Math.ceil((lookupLimit.resetAt - Date.now()) / 1000));
+  }
 
   const share = await getShareByToken(token);
   if (!share || share.revokedAt || share.expiresAt.getTime() <= Date.now()) {
     return ApiError.notFound();
+  }
+
+  // Stage 2 — the share is real and active, so its id is a safe (bounded, non-secret) key for
+  // limiting repeated downloads of this specific link.
+  const downloadLimit = checkRateLimit(`verify-download:${share.id}`, DOWNLOAD_RATE_LIMIT, RATE_LIMIT_WINDOW_MS);
+  if (!downloadLimit.success) {
+    return ApiError.tooManyRequests(Math.ceil((downloadLimit.resetAt - Date.now()) / 1000));
   }
 
   // getShareByToken deliberately excludes pdfData (see its doc comment) — fetched here, only once

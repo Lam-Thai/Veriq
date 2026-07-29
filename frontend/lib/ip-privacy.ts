@@ -3,6 +3,20 @@ import { createHash } from "node:crypto";
 import { env } from "@/lib/env";
 
 /**
+ * First entry of a (possibly multi-hop) `x-forwarded-for`, or null when absent. Shared by the two
+ * public routes so they extract the caller's address identically.
+ *
+ * This is best-effort and client-influenced — a direct caller can set the header freely. It is
+ * therefore only ever used for *transient* purposes (an in-memory rate-limit key) or fed through
+ * `hashCoarseIp` before storage; never trusted as identity and never persisted raw.
+ */
+export function clientIpFromHeaders(requestHeaders: Headers): string | null {
+  const forwardedFor = requestHeaders.get("x-forwarded-for");
+  if (!forwardedFor) return null;
+  return forwardedFor.split(",")[0]?.trim() || null;
+}
+
+/**
  * Coarsens a raw IP so a stored hash can never be reversed to a precise address: IPv4 loses its
  * last octet, IPv6 is truncated to its /64 prefix (the smallest block a residential ISP typically
  * routes to a single customer, so this stays "roughly which network," never "which device").

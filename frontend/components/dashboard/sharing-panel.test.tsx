@@ -134,7 +134,7 @@ describe("SharingPanel — revoke flow", () => {
       />,
     );
 
-    await user.click(screen.getByRole("button", { name: "Revoke" }));
+    await user.click(screen.getByRole("button", { name: /^Revoke share link created/ }));
     expect(screen.getByRole("button", { name: "Confirm" })).toBeTruthy();
 
     fetchMock.mockResolvedValueOnce(jsonResponse({}, true));
@@ -160,7 +160,7 @@ describe("SharingPanel — revoke flow", () => {
       />,
     );
 
-    await user.click(screen.getByRole("button", { name: "Revoke" }));
+    await user.click(screen.getByRole("button", { name: /^Revoke share link created/ }));
     fetchMock.mockResolvedValueOnce(
       jsonResponse({ error: { code: "NOT_FOUND", message: "Couldn't revoke this share link." } }, false),
     );
