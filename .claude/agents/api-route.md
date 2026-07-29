@@ -191,7 +191,7 @@ before merging one.
   shape, since every fresh token gets a fresh bucket:
   ```ts
   // 1. Before the DB lookup — keyed on the caller, bounds enumeration.
-  checkRateLimit(`verify-lookup-ip:${clientIpFromHeaders(h) ?? "unknown"}`, 30, 60_000)
+  checkRateLimit(`verify-lookup-ip:${clientIpFromHeaders(requestHeaders) ?? "unknown"}`, 30, 60_000)
   // 2. After the share resolves — keyed on its id, bounds hammering one real link.
   checkRateLimit(`verify-download:${share.id}`, 20, 60_000)
   ```
@@ -212,13 +212,18 @@ before merging one.
 
 ## Audit Checklist
 - [ ] The handler's first security check runs before any other logic — `currentUser()` for a
-      session route, signature verification for a webhook, token shape-check + hashed lookup for a
-      token-gated public route. One of the three, always first
+      session route, signature verification for a webhook, token shape-check for a token-gated
+      public route. One of the three, always first
 - [ ] `safeParse` used, not `parse`
 - [ ] Rate limiting applied (`checkRateLimit` from `lib/rate-limit.ts`) if this route is a
       plausible abuse target, keyed per `userId` — or, on a public route where no user exists, on
       a bounded value (client IP pre-lookup, resolved resource id post-lookup). Never on a raw
       caller-supplied token
+- [ ] Token-gated public route specifically: the order is shape-check → rate limit (bounded key)
+      → hashed DB lookup, not shape-check → lookup → rate limit. The rate limit must sit before
+      the DB query it protects, or a flood of well-formed-but-nonexistent tokens reaches the
+      database unthrottled — the shape check alone only screens out garbage-shaped input, not a
+      real attempt at enumeration
 - [ ] Logging uses `loggerFor(requestId)` from `lib/logger.ts`, not a new `console.*` call
 - [ ] Anything genuinely CPU/latency-heavy (>500ms) and Node-only is backgrounded via the
       `after()` job pattern (see `app/api/report/route.tsx`), not run inline

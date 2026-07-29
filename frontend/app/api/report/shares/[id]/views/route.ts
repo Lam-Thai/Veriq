@@ -40,7 +40,7 @@ export async function GET(request: Request, ctx: RouteContext<"/api/report/share
     const url = new URL(request.url);
     const limitParam = Number(url.searchParams.get("limit"));
     const page = await getViewsForShare(userId, id, {
-      limit: Number.isFinite(limitParam) && limitParam > 0 ? limitParam : undefined,
+      limit: Number.isInteger(limitParam) && limitParam > 0 ? limitParam : undefined,
       cursor: url.searchParams.get("cursor") ?? undefined,
     });
     if (page === null) return ApiError.notFound();
