@@ -264,6 +264,20 @@ export const env = loadEnv()
 Verify this actually works both ways before trusting it: temporarily rename `.env.local` aside
 and confirm `next build` now succeeds (with a visible warning) *and* that `next start` still
 throws for a route that genuinely needs the missing var — don't just trust the logic on paper.
+
+**Corollary — any CI job that runs `next start` needs the full required env set, and a green local
+e2e run does not predict it.** The build-phase fallback covers `next build` only; `next start` is a
+normal production server where validation is strict by design. A workflow that supplies env only to
+the build step will build fine and then 500 at request time on any route whose module graph reaches
+`lib/env.ts`. This is *latent*: it stays invisible until a spec first exercises a dynamic page that
+imports `lib/db.ts`, at which point a previously-green workflow goes red on a diff that didn't
+touch CI. Locally it never reproduces, because `.env.local` quietly satisfies everything.
+
+The fix is a **job-level** env block of placeholders covering every required field (not per-step —
+a partial set is the whole failure mode), mirroring `lib/env.ts`'s own `BUILD_PLACEHOLDERS`. Real
+example: `.github/workflows/playwright.yml`. Two things this does *not* buy you: a database
+(`DATABASE_URL` points at nothing, so specs still can't touch real rows), and any excuse to set an
+`.optional()` var — leave those unset in CI so the absent-path stays exercised.
 See also "Third-Party SDK Production Verification" below for the related-but-different Clerk
 case, where the SDK itself (not your own zod schema) degrades ungracefully outside `next dev`.
 

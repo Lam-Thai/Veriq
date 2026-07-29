@@ -63,6 +63,16 @@ The examples in this doc are the *target* patterns. What actually exists today:
   alongside the usual `@/lib/env` / `@/lib/logger` mocks — see `lib/email.test.ts`.
 - **`userEvent.setup()` installs its own `navigator.clipboard` stub**, silently clobbering a
   clipboard mock installed before it. Order matters — see `components/ui/copy-button.test.tsx`.
+- **A green local `npm run test:e2e` does not predict a green CI run.** Locally `.env.local`
+  satisfies the whole env schema; in CI only what the workflow explicitly sets exists, and
+  `next start` validates strictly (the build-phase placeholder fallback does not apply at runtime).
+  A spec that renders a *dynamic page importing `lib/db.ts`* is the first thing to expose a gap
+  there — it 500s, and your assertion fails on a missing element rather than on anything to do with
+  your test. **If a new spec fails in CI but passes locally, check the workflow's env block before
+  touching the spec.** See the `security` skill's "Env Validation at Startup" corollary.
+- Run e2e through `npm run test:e2e`, never a bare `npx playwright test` — `npx` may fetch a
+  different Playwright version than the installed `@playwright/test` and fail with a confusing
+  "did not expect test.describe() to be called here".
 
 ---
 
