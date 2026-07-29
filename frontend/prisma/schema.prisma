@@ -26,6 +26,7 @@ model User {
   incomeNarrative     IncomeNarrative?
   reportJobs          ReportJob[]
   expenses            Expense[]
+  reportShares        ReportShare[]
 
   @@index([clerkId])
 }
@@ -129,6 +130,8 @@ model ReportJob {
   createdAt      DateTime        @default(now()) @db.Timestamptz(3)
   updatedAt      DateTime        @updatedAt @db.Timestamptz(3)
 
+  shares         ReportShare[]
+
   // Covers both getLastReportValidUntil/createReportJobIfAllowed's
   // { userId, status: {in:[...]} } filter and getReportHistory's { userId } lookup, both ordered
   // by createdAt desc — an index-only scan instead of a post-scan sort on two hot paths (report
@@ -174,4 +177,44 @@ enum ExpenseCategory {
   PHONE_INTERNET
   HOME_OFFICE
   OTHER
+}
+
+model ReportShare {
+  id            String    @id @default(cuid())
+  reportJobId   String
+  reportJob     ReportJob @relation(fields: [reportJobId], references: [id], onDelete: Cascade)
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // sha256 hex digest of the raw bearer token minted at creation. The raw token is returned once
+  // in the create response and never persisted — a DB-only exposure yields no live credentials.
+  tokenHash     String    @unique @db.VarChar(64)
+
+  expiresAt     DateTime  @db.Timestamptz(3)
+  revokedAt     DateTime? @db.Timestamptz(3)
+  createdAt     DateTime  @default(now()) @db.Timestamptz(3)
+  // Set exactly once, atomically, by the first successful /verify view. Doubles as the
+  // first-view email race guard. Null = never viewed.
+  firstViewedAt DateTime? @db.Timestamptz(3)
+
+  views         ReportShareView[]
+
+  // Serves listSharesForUser's { userId } scan for the dashboard tab, newest first.
+  @@index([userId, createdAt(sort: Desc)])
+  // Serves the cap-of-10 count query: { reportJobId, revokedAt: null, expiresAt: { gt: now } }.
+  @@index([reportJobId, revokedAt, expiresAt])
+}
+
+model ReportShareView {
+  id            String      @id @default(cuid())
+  reportShareId String
+  reportShare   ReportShare @relation(fields: [reportShareId], references: [id], onDelete: Cascade)
+  viewedAt      DateTime    @default(now()) @db.Timestamptz(3)
+  // sha256(salt + coarsened IP). Never a raw or plaintext-coarse IP. Null if no salt is
+  // configured or no IP header was present.
+  ipHash        String?     @db.VarChar(64)
+  userAgent     String?     @db.VarChar(300)
+
+  // Serves the per-link view-log query: { reportShareId }, ordered by viewedAt desc.
+  @@index([reportShareId, viewedAt(sort: Desc)])
 }

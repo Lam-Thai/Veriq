@@ -35,7 +35,44 @@ The examples in this doc are the *target* patterns. What actually exists today:
   and a dedicated test DB are illustrative only — do not import them until they're built. The same
   goes for the Playwright login helper (`e2e/helpers/auth`): there is no Clerk test-session infra,
   so current `e2e/*.spec.ts` only cover the unauthenticated boundary (e.g. `/dashboard` redirects to
-  sign-in). Building any of that harness is real setup work to plan, not a given.
+  sign-in). `.github/workflows/playwright.yml` has **no Postgres service container** — the
+  placeholder `DATABASE_URL` there is scoped to the `npm ci` step alone (Prisma 7's config loader
+  requires the var to be *present* for `prisma generate`, which never connects); the build and e2e
+  steps receive no `DATABASE_URL` at all. So no spec can seed or read a real row in CI. Note that
+  real Clerk secrets *are* wired into that workflow (there's even a preflight step verifying them) —
+  what's missing is a way to establish a signed-in **session**, not Clerk configuration. Building
+  any of that harness is real setup work to plan, not a given.
+- **The only `@/lib/db` mock is a narrow hand-rolled fake — and that's the ceiling, not a
+  starting point.** `lib/report-shares.test.ts` does `vi.mock("@/lib/db", () => ({ db: mockDb }))`
+  with a small in-memory object mimicking `updateMany`'s zero-count semantics, to prove exactly one
+  of two concurrent callers wins the first-claim race. That's a legitimate unit test of the
+  *branch logic*, and it's the pattern to copy for a similarly narrow seam. It is emphatically
+  **not** a test of the Postgres row lock — annotate any such fake so nobody later reads it as
+  proof the DB guarantee holds.
+- **Fidelity ceiling:** a hand-rolled fake can only ever prove your branching is right, never that
+  Postgres does what you think (advisory locks, cross-connection row locks, real transaction
+  isolation, cascade behaviour, constraint violations). Ownership checks, cap enforcement, and
+  cursor gating that live inside a `db.$transaction` are therefore still effectively
+  integration-only. Don't paper over that: cover the pure layer that *is* reachable (zod schemas,
+  token/regex/hash helpers, calculators), and say plainly in your summary which cases remain
+  uncovered and why — never downgrade an IDOR test into something that doesn't exercise IDOR.
+  Building out a general Prisma-mocking framework is out of scope; a real test DB is the fix.
+- **`import "server-only"` must be mocked under Vitest.** Its no-op variant is selected via the
+  `react-server` export condition that Next's bundler sets; under plain Node it resolves to the
+  throwing `index.js`. Any test touching a `server-only` module needs `vi.mock("server-only", ...)`
+  alongside the usual `@/lib/env` / `@/lib/logger` mocks — see `lib/email.test.ts`.
+- **`userEvent.setup()` installs its own `navigator.clipboard` stub**, silently clobbering a
+  clipboard mock installed before it. Order matters — see `components/ui/copy-button.test.tsx`.
+- **A green local `npm run test:e2e` does not predict a green CI run.** Locally `.env.local`
+  satisfies the whole env schema; in CI only what the workflow explicitly sets exists, and
+  `next start` validates strictly (the build-phase placeholder fallback does not apply at runtime).
+  A spec that renders a *dynamic page importing `lib/db.ts`* is the first thing to expose a gap
+  there — it 500s, and your assertion fails on a missing element rather than on anything to do with
+  your test. **If a new spec fails in CI but passes locally, check the workflow's env block before
+  touching the spec.** See the `security` skill's "Env Validation at Startup" corollary.
+- Run e2e through `npm run test:e2e`, never a bare `npx playwright test` — `npx` may fetch a
+  different Playwright version than the installed `@playwright/test` and fail with a confusing
+  "did not expect test.describe() to be called here".
 
 ---
 
@@ -241,6 +278,25 @@ test('user creates and sends an invoice', async ({ page }) => {
 - Tests must be idempotent: re-runnable in any order.
 - Integration tests use a dedicated test DB — never dev DB.
 - Mock only external services (email, Stripe, S3) — not your own modules.
+
+## Reporting Coverage You Couldn't Achieve
+The checklist below is the bar. When a box genuinely can't be ticked with the harness that exists
+(see Repo Reality), the correct output is to **name it explicitly in your summary** — which case,
+what infra it needs — not to quietly drop it or substitute a weaker test that appears to cover it.
+An honest "IDOR and cap-enforcement cases need a test DB + Clerk test session, neither of which
+exists" is far more useful than a green suite that never exercised those paths, because the green
+suite actively misleads the next reviewer.
+
+**But be precise about *which* infra each case actually needs — over-claiming a blocker is its own
+failure.** These are three different situations, not one:
+- **Authenticated + DB** (IDOR on a share, cap-of-10 enforcement): genuinely needs both a Clerk
+  test session and a real Postgres row. Report as blocked.
+- **Public + DB** (a real active/expired/revoked `/verify/[token]` render): needs Postgres, but
+  **no** Clerk session — the route is unauthenticated. Don't cite a session as the blocker.
+- **Public + no DB** (the IP-keyed pre-lookup rate limit on `/verify/[token]` and its download
+  route): needs *neither*. The limiter fires before any query, so hammering the route past its
+  window returns 429 with nothing seeded. This is testable today — write it rather than filing it
+  under "blocked on infra".
 
 ## Audit Checklist
 - [ ] Happy path covered

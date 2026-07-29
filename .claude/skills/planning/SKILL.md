@@ -50,6 +50,22 @@ State dependencies as edges, not as prose buried in a paragraph: `depends on: ph
 
 ---
 
+## Assumptions Must Be Verified, Not Recalled
+A plan is read by implementing agents as *authoritative*, so a confidently-stated wrong fact about
+an existing convention propagates straight into code. Before writing "the repo does X" into a plan,
+open the file and confirm it. Cite it (`lib/env.ts:88`) so the next reader can re-check cheaply.
+
+Real instance from the report-sharing plan: it asserted that `.optional()` env fields are omitted
+from `BUILD_PLACEHOLDERS`, extrapolated from a half-remembered read. The opposite is true — the map
+is typed over every schema key — and two separate agents each burned a round-trip discovering the
+`tsc` error and correcting it. The failure was cheap only because the type system caught it; the
+same class of mistake about something *not* compiler-enforced (a rate-limit convention, an
+ownership-check idiom) ships silently.
+
+The tell: any sentence in a plan of the form "per repo convention, X" that you did not verify in
+this session. Either verify it or mark it explicitly as an assumption for the implementing agent to
+confirm first.
+
 ## Risk & Open Questions
 - Flag risk **honestly and specifically** — "this touches the payments webhook, which has a
   documented double-billing trap" is useful; "this could be risky" is not.
@@ -78,6 +94,8 @@ The canonical mapping — kept in sync with the `planning` agent's own copy:
 | LLM calls, prompts, structured output | `ai-feature` |
 | Dockerfile/compose changes | `docker` |
 | New/changed tests | `testing` |
+| A new unauthenticated/public route, or storing a new credential or identifier | `api-route` to build, then `security-audit` — non-optional, not "if time allows" |
+| Outbound notification infra (email/SMS provider, templates, send helpers) | `api-route` — it's a `lib/` service module + env wiring, not a UI or DB concern |
 | Anything touching auth/payments/uploads/user data/CI before merge | `security-audit` |
 | Final correctness/quality pass on a diff | `code-review` |
 | A closing unknown discovered mid-plan | `research` |

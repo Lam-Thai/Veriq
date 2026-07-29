@@ -46,6 +46,27 @@ const EnvSchema = z.object({
   // (instrumentation-client.ts, app/global-error.tsx). A DSN is a public project identifier, not
   // a secret — safe to inline client-side, same as NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY below.
   NEXT_PUBLIC_SENTRY_DSN: z.string().min(1).optional(),
+  // Resend API key — sends the "your shared report was viewed" notification email from
+  // lib/email.ts. Optional, same reasoning as GEMINI_API_KEY: the notification is a nice-to-have
+  // layered on top of the public /verify page, not something that page's core job (rendering a
+  // shared report) can be allowed to depend on. lib/email.ts checks for this itself at call time
+  // and warns-and-returns when it's absent, so an unconfigured key degrades to "no email sent",
+  // never to a broken verify page.
+  RESEND_API_KEY: z.string().min(1).optional(),
+  // Verified "from" address for the email above. Optional and independent of RESEND_API_KEY being
+  // set — Resend requires sending from a domain verified in its dashboard, which this repo won't
+  // have configured in most environments, so lib/email.ts falls back to a placeholder sender
+  // address rather than requiring this too.
+  RESEND_FROM_EMAIL: z.string().email().optional(),
+  // Salt mixed into the coarsened-IP hash on a report share's view log (lib/ip-privacy.ts) —
+  // `min(16)` so a trivially short/guessable value can't be configured. Never logged.
+  //
+  // Optional, like GEMINI_API_KEY above: the view log's IP hash is additive UX (the owner sees
+  // *when* and *what browser*, an IP hash is a nice-to-have on top), never load-bearing for the
+  // share/reveal flow itself. lib/ip-privacy.ts checks for its presence and degrades to storing
+  // `ipHash: null` when absent — it deliberately never falls back to hashing without a salt, since
+  // an unsalted hash of a coarsened IP is a small enough space to be practically reversible.
+  REPORT_SHARE_IP_SALT: z.string().min(16).optional(),
 });
 
 // `next build`'s "Collecting page data" step imports every route module to statically analyze
@@ -77,6 +98,9 @@ const BUILD_PLACEHOLDERS: Record<keyof z.infer<typeof EnvSchema>, string> = {
   FASTAPI_URL: "http://localhost:8000",
   SENTRY_DSN: "build-placeholder-dsn",
   NEXT_PUBLIC_SENTRY_DSN: "build-placeholder-dsn",
+  RESEND_API_KEY: "resend-buildplaceholder",
+  RESEND_FROM_EMAIL: "build-placeholder@example.com",
+  REPORT_SHARE_IP_SALT: "build-placeholder-salt-16-chars",
 };
 
 function loadEnv(): z.infer<typeof EnvSchema> {

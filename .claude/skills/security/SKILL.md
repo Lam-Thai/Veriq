@@ -137,6 +137,12 @@ does nothing to stop many different users collectively exceeding a quota that is
 partitioned by user. See the `ai-integration` skill's "Free-tier realities" section for the
 concrete example this pattern came from.
 
+"Per `userId`, never IP" assumes a session exists — it's about not substituting a spoofable IP for
+identity you actually have. On a genuinely **public** route there is no user id; key on the bearer
+token instead, and see the "Public / Unauthenticated Routes" section below (which also covers the
+RSC-page-that-writes case, where the thing needing a limit doesn't look like a route handler at
+all).
+
 **Cleanup cost**: if the limiter does opportunistic cleanup of expired entries once its map grows
 past a threshold, throttle that sweep (e.g. "at most once per N seconds") rather than running a
 full scan on every call once you're over the threshold — otherwise, for as long as the map stays
@@ -258,6 +264,20 @@ export const env = loadEnv()
 Verify this actually works both ways before trusting it: temporarily rename `.env.local` aside
 and confirm `next build` now succeeds (with a visible warning) *and* that `next start` still
 throws for a route that genuinely needs the missing var — don't just trust the logic on paper.
+
+**Corollary — any CI job that runs `next start` needs the full required env set, and a green local
+e2e run does not predict it.** The build-phase fallback covers `next build` only; `next start` is a
+normal production server where validation is strict by design. A workflow that supplies env only to
+the build step will build fine and then 500 at request time on any route whose module graph reaches
+`lib/env.ts`. This is *latent*: it stays invisible until a spec first exercises a dynamic page that
+imports `lib/db.ts`, at which point a previously-green workflow goes red on a diff that didn't
+touch CI. Locally it never reproduces, because `.env.local` quietly satisfies everything.
+
+The fix is a **job-level** env block of placeholders covering every required field (not per-step —
+a partial set is the whole failure mode), mirroring `lib/env.ts`'s own `BUILD_PLACEHOLDERS`. Real
+example: `.github/workflows/playwright.yml`. Two things this does *not* buy you: a database
+(`DATABASE_URL` points at nothing, so specs still can't touch real rows), and any excuse to set an
+`.optional()` var — leave those unset in CI so the absent-path stays exercised.
 See also "Third-Party SDK Production Verification" below for the related-but-different Clerk
 case, where the SDK itself (not your own zod schema) degrades ungracefully outside `next dev`.
 
@@ -286,6 +306,22 @@ Ask, for every new required field you add to a shared env schema: "if this is un
 the feature that needs it break, or does it take unrelated pages down with it?" If the latter and
 the feature isn't supposed to be load-bearing for the rest of the app, it needs to be optional.
 
+### Adding a field to this env schema is a **two-place** edit, optional or not
+`.optional()` in `EnvSchema` is only half of it. `BUILD_PLACEHOLDERS` is typed
+`Record<keyof z.infer<typeof EnvSchema>, string>` — a mapped type over *every* schema key — so
+omitting an entry is a **compile error** (`TS2739: ... is missing the following properties`), not a
+silently-degraded build. Optional fields are not exempt: `GEMINI_API_KEY`, `SENTRY_DSN`,
+`RESEND_API_KEY`, and `REPORT_SHARE_IP_SALT` all appear in that map today. The placeholder still has
+to satisfy the field's own format constraint (an `.email()` field needs an email-shaped
+placeholder, a `.min(16)` field needs 16+ chars), or `next build`'s fallback `EnvSchema.parse`
+throws the moment it's used.
+
+> This exact assumption — "optional fields skip `BUILD_PLACEHOLDERS`" — was written into a plan as
+> fact and had to be corrected independently by two different agents who actually opened the file
+> and hit the `tsc` error. The type makes it self-enforcing, so the failure is loud and immediate;
+> the cost is only the wasted round-trip. Read `lib/env.ts` before asserting anything about its
+> shape.
+
 ### `server-only` guard on modules that read secret env vars
 Any module that imports `env` from `lib/env.ts` to read a server secret (not a `NEXT_PUBLIC_*`
 value) and could plausibly be imported by mistake from a `"use client"` file should start with
@@ -304,6 +340,136 @@ class Settings(BaseSettings):
     INTERNAL_JWT_SECRET: str  # required — startup crashes if missing
     SENTRY_DSN: str | None = None
 ```
+
+---
+
+## Secrets and PII at Rest
+
+> **Repo reality check**: both patterns below are real and working as of the report-sharing
+> feature — `lib/report-shares.ts` (share tokens) and `lib/ip-privacy.ts` (viewer IPs). This is the
+> first place in the repo that persists either a bearer credential or a network identifier, so
+> these are the reference implementations, not aspirational sketches.
+
+### Bearer tokens: store the hash, never the token
+Any opaque value that *is* the access control for a resource — a share link, an invite code, an
+API key you issue, a password-reset token — gets stored as `sha256(token)`, never raw. The raw
+value exists only in the response that mints it and in whatever the user does with it afterward.
+
+```ts
+// Mint 256 bits — not randomUUID()'s ~122. Cheap to do, and this token is the entire
+// access control for a real user's data over a long life, sent over channels you don't control.
+export function mintShareToken(): string { return randomBytes(32).toString("base64url") }
+export function hashShareToken(raw: string): string {
+  return createHash("sha256").update(raw).digest("hex")
+}
+// Lookup is a plain indexed equality match on the hash — findUnique({ where: { tokenHash } }).
+// timingSafeEqual is for comparing two secrets *in your own memory*; it does not apply to a DB
+// index lookup, and reaching for it here is over-engineering.
+```
+Sizing the token to the job: a request-scoped CSRF nonce bound to a cookie (`lib/connect-flow.ts`'s
+`state`, `crypto.randomUUID()`) is a different risk class from a standalone bearer credential live
+for 90 days — don't cargo-cult one's entropy budget onto the other. Store the hash in a
+`@unique @db.VarChar(64)` column; per the `prisma` skill, `@unique` already creates the index, so
+don't add a redundant `@@index`.
+
+**Shape-validate before you hash or query.** Pin the token's exact format in a regex
+(`/^[A-Za-z0-9_-]{43}$/` for 32 base64url bytes) and reject non-matching input *before* any DB
+round-trip. Malformed input then costs zero queries — the cheapest possible defense on the one
+lookup an unauthenticated caller can drive.
+
+### Network identifiers: coarsen, **then** salt-hash — and store nothing if unsalted
+Storing a viewer's IP verbatim in an access log is a PII decision, not a logging detail. The
+working pattern (`lib/ip-privacy.ts`):
+1. **Coarsen** — IPv4: zero the last octet; IPv6: truncate to the /64 prefix. This genuinely
+   discards information before anything else happens.
+2. **Salt-hash** — `sha256(REPORT_SHARE_IP_SALT + coarsenedIp)`, stored as hex.
+
+Neither step alone is sufficient, and the reason is worth internalizing: hashing *without*
+coarsening still fingerprints the exact IP (2^32 for IPv4 is brute-forceable), and coarsening
+*without* a salt leaves a ~16M-value space that's trivially rainbow-tabled. The salt is what makes
+the reduced space non-invertible.
+
+**The critical rule: if the salt is unset, store `null` — never fall back to an unsalted hash.**
+An unsalted hash of a small guessable space is not protection; a silent `""`-salt fallback looks
+like it's doing something while doing nothing. This is the one case where "degrade gracefully"
+means *store less*, not *store it anyway with a weaker guarantee*. Make the salt `.optional()` in
+the env schema and have the helper return `null` — and unit-test that specific branch, because it's
+the kind of thing a later refactor quietly "fixes" into a fallback.
+
+A one-way digest also constrains the UI downstream: an owner-facing access log built on `ipHash`
+can show *when* and *what browser* (user-agent, stored plain — it isn't the same privacy class and
+the log needs it human-readable), but can never show a location. Don't let a UI imply otherwise.
+
+---
+
+## Public / Unauthenticated Routes
+
+> **Repo reality check**: this app has three, and they're each public for a *different* reason —
+> `app/api/webhooks/stripe/route.ts` (trust via signature verification), `app/verify/[token]/page.tsx`
+> + `app/api/verify/[token]/download/route.ts` (trust via bearer token). Clerk gating in `proxy.ts`
+> is **allowlist**-based (`createRouteMatcher(['/dashboard(.*)', '/connect(.*)'])`), so a new route
+> is public by *default* — you make it public by doing nothing, which means nobody is forced to
+> think about it. That's exactly why this checklist exists.
+
+```text
+□ Trust is established by something — signature, or a high-entropy token. "It's an
+  unguessable URL" is only true if the token is actually high-entropy and hashed at rest
+□ Not-found and malformed-input responses are BYTE-IDENTICAL. This is the one pair that
+  must never be distinguishable — differing responses turn the route into an existence
+  oracle. (Distinct expired/revoked messages are fine and good UX: the caller already
+  holds a real token, so it grants them nothing they didn't have.)
+□ No response — body, header, redirect, or error — reveals the owner's identity/email,
+  or which internal resource is attached, in ANY state
+□ Rate-limited on a key that exists without a session (see below)
+□ `noindex` if it renders a page: `export const metadata = { robots: { index: false, follow: false } }`
+□ Every state re-checks expiry/revocation independently. A direct sub-resource URL
+  (a download endpoint) WILL be bookmarked and re-hit after the parent link lapsed —
+  it must not rely on an earlier check from the page that linked to it
+□ Logs carry internal ids only, never the token or a URL containing it
+□ Verify it's genuinely outside the auth matcher — and that it wasn't accidentally
+  caught by an existing pattern like `/dashboard(.*)`
+```
+
+### Rate-limit keys when there is no user
+The "key per `userId`, never per IP" rule assumes a session exists — it's about not substituting a
+spoofable IP for *real available identity*. On a genuinely public route there is no user id, so the
+rule needs replacing rather than bending. The key must be **bounded**, and the raw bearer token is
+not: `checkRateLimit` is an in-process `Map`, so keying on caller-supplied input lets anyone grow it
+without limit (one entry per token tried), parks the credential in a long-lived structure, and
+stops nothing — each fresh token gets a fresh bucket, which is exactly the enumeration shape you
+were trying to throttle.
+
+Use two stages, keyed on values you control:
+```ts
+// 1. Pre-lookup — bounded by real network sources, and it runs before any DB work.
+//    Transient in-memory only; never logged, never persisted (see hashCoarseIp for storage).
+const ip = clientIpFromHeaders(requestHeaders) ?? "unknown"
+if (!checkRateLimit(`verify-lookup-ip:${ip}`, 30, 60_000).success) return ApiError.tooManyRequests(...)
+
+const share = await getShareByToken(token)          // ...resolve + expiry/revocation checks...
+
+// 2. Post-lookup — the resolved id is bounded (one per real row) and isn't a secret.
+if (!checkRateLimit(`verify-download:${share.id}`, 20, 60_000).success) return ApiError.tooManyRequests(...)
+```
+Stage 1 is the one that's easy to omit and the one that matters most: without it the token lookup
+is completely unthrottled, and a well-formed-but-nonexistent token sails past the shape regex
+straight into the database. (FastAPI's `rate_limit_key` encodes the same precedence — verified JWT
+`sub` first, `get_remote_address` only as a fallback.)
+
+### An RSC page that writes to the DB is an endpoint, not just a render
+A Server Component doing `await recordView(...)` on render is a write path reachable by anyone with
+the URL — but it looks like a page, so it slips past a route-handler-shaped rate-limit review. This
+was a real Medium finding on this repo's first public page: three of four new routes were limited,
+and the unlimited one was the busiest. Gate the **write**, not the render — fail open on showing
+content, fail closed on recording more of it:
+```ts
+const { success: viewRateOk } = checkRateLimit(`verify-view:${token}`, 20, 60_000)
+if (viewRateOk) { /* ...record... */ } else { log.warn(...) }
+```
+Also keep such a write best-effort (`try/catch`, never blocking the render) and make sure the read
+that feeds the page doesn't drag heavy columns with it — `include: { reportJob: true }` on a page
+hit by every viewer will pull a multi-hundred-KB `Bytes` column it never renders. Select narrowly;
+fetch the heavy payload only in the route that actually serves it.
 
 ---
 
@@ -429,3 +595,9 @@ treat them as required, not optional.
 - A required field in a shared, monolithically-validated env schema must actually need to be
   required for the *whole app* to function — an additive/optional feature's secret belongs in
   `.optional()`, checked at its own point of use (see "Required vs. optional secrets" above).
+- A bearer credential you issue (share link, invite code, reset token) is stored as its `sha256`
+  digest, never raw — and a network identifier in an access log is coarsened *and* salt-hashed, or
+  not stored at all. See "Secrets and PII at Rest".
+- Every unauthenticated route gets the "Public / Unauthenticated Routes" checklist run against it
+  before merge — including RSC pages, which are write endpoints whenever they touch the DB. Clerk
+  gating here is allowlist-based, so nothing forces you to notice a route is public.

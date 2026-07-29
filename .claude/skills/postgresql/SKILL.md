@@ -84,6 +84,45 @@ GROUP BY month
 ORDER BY month;
 ```
 
+## Concurrency: check-then-act races
+
+Two patterns cover almost every "this must happen at most once / at most N times" requirement.
+Picking the wrong one is the common failure, so the distinguishing question is: **is there already
+a row to lock on?**
+
+### Advisory lock — when you're counting rows that don't exist yet
+`COUNT(*)` then `INSERT` is a race: concurrent callers both read 9, both pass a `< 10` check, both
+insert. Postgres has no "at most N rows" constraint, so serialize the contenders explicitly:
+```sql
+BEGIN;
+SELECT pg_advisory_xact_lock(hashtext($1));   -- $1 = the PARENT id the cap is scoped to
+SELECT COUNT(*) FROM "ReportShare"
+  WHERE report_job_id = $1 AND revoked_at IS NULL AND expires_at > NOW();
+-- ...INSERT only if under the cap...
+COMMIT;                                        -- lock auto-released; no unlock, no leak on error
+```
+Key on the entity the limit actually belongs to (the parent being capped), never something broader
+— a per-user lock on a per-report cap needlessly serializes a user's unrelated work. Use
+`pg_advisory_xact_lock` (transaction-scoped, auto-released), not `pg_advisory_lock` (session-scoped,
+must be manually unlocked and leaks a held lock on an early return or an exception).
+
+### Guarded `UPDATE` — when the row exists and you're claiming it once
+For "only the first caller proceeds", put the condition in the `WHERE` and check the affected-row
+count. No advisory lock needed: the `WHERE` clause takes a row lock, so a concurrent second
+transaction blocks, re-evaluates against the committed row, and matches zero rows.
+```sql
+UPDATE "ReportShare" SET first_viewed_at = NOW()
+  WHERE id = $1 AND first_viewed_at IS NULL;    -- affected rows: 1 for exactly one caller, 0 for the rest
+```
+This is race-safe at the default READ COMMITTED level — no `SERIALIZABLE`, no `SELECT ... FOR
+UPDATE` round-trip. Never split it into `SELECT` → check → `UPDATE`; the gap between statements is
+the entire bug.
+
+Both are implemented in the Next.js runtime today — see the `prisma` skill for the Prisma-flavored
+versions and the real call sites.
+
+---
+
 ## Performance Rules
 - `EXPLAIN ANALYZE` on any query touching >10k rows before shipping.
 - No `SELECT *` in production queries.

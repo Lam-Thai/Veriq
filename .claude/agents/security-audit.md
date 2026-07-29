@@ -95,6 +95,49 @@ ask what you can reasonably infer.
 □ Re-auth required for destructive account operations
 ```
 
+### Public / Token-Gated Routes — run whenever the diff adds an unauthenticated surface
+
+> Clerk gating in `proxy.ts` is **allowlist**-based, so a route is public by default and nothing
+> flags it. Grep the diff for new files under `app/**` that never call `currentUser()`/`auth()`.
+> Derived from the real audit of this repo's first token-gated public feature (report sharing).
+
+```
+□ Trust established by signature or high-entropy token — not merely "the URL is long"
+□ Bearer token stored as sha256 at rest; raw token never persisted, never logged, never
+  in a logged URL. Grep every log call on the create/verify/download paths
+□ Token shape-validated (regex) BEFORE hashing or querying — no DB round-trip on garbage
+□ Not-found and malformed responses are byte-identical (no existence oracle). Distinct
+  expired/revoked copy is acceptable — the caller already holds a real token
+□ No state leaks owner identity/email or which internal resource is attached
+□ Expiry AND revocation re-checked independently in EVERY route, not just the page that
+  links them — a bookmarked sub-resource URL must not outlive its parent link
+□ Rate-limited on a key that exists without a session — and that key is BOUNDED, never
+  the raw token. checkRateLimit is an in-process Map: an attacker-supplied token as the
+  key grows it without limit and buys nothing (each new token = a fresh bucket). Expect
+  two stages: client IP before the DB lookup, resolved resource id after it
+□ Page routes emit noindex via route `metadata`, and it's live in rendered HTML — not a
+  dead export that got miswired
+□ RSC pages that write to the DB are treated as endpoints: rate-limited, best-effort
+  (try/catch, never blocking render), side effects deferred via after() outside any txn.
+  This is the one most often missed — it doesn't look like a route handler
+```
+
+### PII & Secrets at Rest — run whenever the diff adds a stored identifier or credential
+
+```
+□ Network identifiers (IP) coarsened AND salt-hashed — or not stored at all. Verify there
+  is NO code path that hashes with an empty/absent salt; "degrade gracefully" here must
+  mean store null, never store-it-anyway-unsalted
+□ The salt/secret enabling the above is .optional() in EnvSchema (so an unset value can't
+  500 unrelated pages) AND present in BUILD_PLACEHOLDERS (the mapped type requires every
+  key — omitting one is a compile error, not a silent degrade)
+□ Owner-facing UI built on a one-way digest never displays or implies a location
+□ Cap/quota enforcement is race-safe (advisory lock inside the transaction), not a bare
+  count-then-create
+□ "Exactly once" side effects (notification emails) gated by a scoped updateMany + zero-
+  count check, not a read-then-write pair
+```
+
 ---
 
 ## OWASP Checklist — FastAPI
@@ -252,6 +295,13 @@ After:
 - `pickle` deserialization of user data
 - Hardcoded credentials or tokens of any kind
 - Service token not verified (just decoded)
+- A bearer credential this app issues (share link, invite, reset token) stored raw instead of as a
+  `sha256` digest — or written to a log, directly or inside a URL
+- A hash of a small/guessable input space (an IP, a phone number, an email) computed with an empty
+  or hardcoded salt as a "graceful fallback" when the real salt is unset — store nothing instead
+- An unauthenticated route whose not-found and malformed-input responses are distinguishable
+- A sub-resource route (download, export) that trusts an expiry/revocation check performed by the
+  page that linked to it, rather than re-checking independently
 - Git hook or CI script pipes a remote download into a shell (`curl | sh`, `wget | sh`) instead of invoking local, version-controlled tooling
 - `pull_request_target` used on a workflow that checks out and runs fork PR code with secrets in scope
 - Third-party GitHub Action referenced by a mutable tag/branch instead of a pinned commit SHA

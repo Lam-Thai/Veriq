@@ -100,6 +100,19 @@ export default proxy
 export const config = { matcher: ['/((?!_next|.*\\..*).*)', '/(api|trpc)(.*)'] }
 ```
 
+**This is an allowlist: a route you don't add is public.** Nothing warns you, no build step
+complains — you ship a public route by writing a file. When adding one deliberately (a token-gated
+verifier page, a webhook), that's convenient; the risk is shipping one *accidentally*. Two
+consequences worth internalizing:
+- A new public route needs the `security` skill's "Public / Unauthenticated Routes" checklist run
+  against it — anti-enumeration, `noindex`, rate-limit key without a session, independent
+  expiry/revocation re-checks on every sub-resource.
+- **An RSC page that writes to the DB is an endpoint.** `await recordView(...)` in a Server
+  Component body is a write path anyone with the URL can drive, but it reads like a render, so it
+  sails past a review looking for `route.ts` handlers. Rate-limit the write, keep it best-effort
+  (`try/catch` so a failed write never blocks the render), and schedule any follow-on side effect
+  with `after()` rather than awaiting it inline.
+
 ## Async / Background Work (`after()`)
 A request handler must never block on genuinely CPU/latency-heavy work (>500ms — see the
 `engineering-standards` skill's Scalability gate). If that work is Python-portable, move it to
@@ -173,6 +186,47 @@ interactive list in client state, and after each mutation do both — refetch th
   To reset a form when a dialog opens, remount it with a `key` (initialize `useState` from props) —
   see `components/dashboard/expense-form-dialog.tsx`. For a portal "mounted" flag, prefer a
   `typeof document === 'undefined'` render guard over a `useEffect(() => setMounted(true))`.
+
+## `react-hooks/purity`: no `Date.now()` / `new Date()` reachable from render
+This Next.js version ships a `react-hooks/purity` lint rule (a **build-blocking error**, not a
+warning) that flags reading the clock from anywhere reachable during render — directly in a
+component body, inside a `useMemo`, or in a helper the component calls while rendering. It's a real
+correctness rule, not lint noise: a clock read during render is exactly the kind of impurity that
+breaks under re-render and future concurrent features.
+
+It bites constantly on time-derived UI state — "is this expired", "is this in the past" — which is
+precisely what any expiry/scheduling feature is made of. Two fixes, both used in this repo:
+```ts
+// 1. Hoist the impure decision into a standalone function OUTSIDE the component.
+function resolveShareStatus(share: { revokedAt: Date | null; expiresAt: Date }) {
+  if (share.revokedAt) return 'revoked'
+  return share.expiresAt.getTime() <= Date.now() ? 'expired' : 'active'
+}
+
+// 2. Where the value must be computed inline, `new Date().getTime()` is not flagged where a bare
+//    `Date.now()` is — see the existing `todayIso()` in components/dashboard/expense-form-dialog.tsx.
+```
+Fix #1 is the one to reach for; #2 exists because it's the established in-repo precedent, not
+because the distinction is principled. Server Components are equally subject to this.
+
+## `server-only` modules can't be imported by client components — pass constants as props
+A `lib/*.ts` that starts with `import "server-only"` (per the `security` skill, any module reading
+a secret should) will hard-fail a build if a `"use client"` component imports it — **including for
+a plain exported constant** like `MAX_ACTIVE_SHARES_PER_REPORT`. Only `import type` is safe across
+that boundary, since types are erased.
+
+So when a client component needs a limit the server module owns, don't duplicate the number into
+the component (two sources of truth that silently drift) and don't strip the `server-only` guard to
+make the import work. Thread it down from the RSC page that already imports the module legitimately:
+```tsx
+// app/dashboard/page.tsx (RSC — can import the server-only module)
+<SharingPanel maxActiveShares={MAX_ACTIVE_SHARES_PER_REPORT} initialShares={shares} />
+// components/dashboard/sharing-panel.tsx ("use client")
+import type { ReportShareDto } from '@/lib/report-shares'   // ← type-only import: fine
+```
+If a constant is genuinely needed by both sides and carries no secret, the other option is a third
+module with no `server-only` guard that both import — but prop-threading is usually simpler and
+keeps the server as the single owner.
 
 ## Security Headers (next.config.ts)
 ```ts

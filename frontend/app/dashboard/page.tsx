@@ -6,6 +6,7 @@ import { OverviewPanel } from "@/components/dashboard/overview-panel";
 import { CalculatorsPanel } from "@/components/dashboard/calculators-panel";
 import { ExpensesPanel } from "@/components/dashboard/expenses-panel";
 import { ReportPanel } from "@/components/dashboard/report-panel";
+import { SharingPanel } from "@/components/dashboard/sharing-panel";
 import { getUserConnections, computeDashboardStats } from "@/lib/dashboard-data";
 import { listExpensesForUser, getExpenseSummaryForUser } from "@/lib/expense-data";
 import { computeExpenseSummary, type ExpenseSummary } from "@/lib/expense-calculators";
@@ -17,6 +18,12 @@ import {
   getReportHistoryForUser,
   type ReportHistoryEntry,
 } from "@/lib/report-jobs";
+import {
+  listSharesForUser,
+  MAX_ACTIVE_SHARES_PER_REPORT,
+  MAX_SHARE_EXPIRY_DAYS,
+  type ReportShareDto,
+} from "@/lib/report-shares";
 import { resolveUserPlan } from "@/lib/plan-resolution";
 import { PLAN_LIMITS } from "@/lib/plan-limits";
 
@@ -51,13 +58,24 @@ export default async function DashboardPage() {
     averageMonthlyGross: incomeProjection?.averageMonthly ?? 0,
     annualizedGross: incomeProjection?.annualizedIncome ?? 0,
   };
-  const [expensePage, expenseSummary]: [{ expenses: ExpenseDto[]; nextCursor: string | null }, ExpenseSummary] =
-    internalUserId
-      ? await Promise.all([
-          listExpensesForUser(internalUserId, { limit: DEFAULT_PAGE_SIZE }),
-          getExpenseSummaryForUser(internalUserId, expenseIncomeContext),
-        ])
-      : [{ expenses: [], nextCursor: null }, computeExpenseSummary([], expenseIncomeContext)];
+  // Shares are fetched alongside the expense queries rather than after them — they're independent,
+  // so awaiting separately would add a serial DB round-trip to every dashboard render.
+  const [expensePage, expenseSummary, initialShares]: [
+    { expenses: ExpenseDto[]; nextCursor: string | null },
+    ExpenseSummary,
+    ReportShareDto[],
+  ] = internalUserId
+    ? await Promise.all([
+        listExpensesForUser(internalUserId, { limit: DEFAULT_PAGE_SIZE }),
+        getExpenseSummaryForUser(internalUserId, expenseIncomeContext),
+        listSharesForUser(internalUserId),
+      ])
+    : [{ expenses: [], nextCursor: null }, computeExpenseSummary([], expenseIncomeContext), []];
+
+  // Sharing tab: new links always point at the most recent READY report job. reportHistory is
+  // already newest-first (getReportHistoryForUser), so the first READY entry is it — no separate
+  // query needed. A user with no User row yet has neither a report nor any shares.
+  const latestReadyReportJobId = reportHistory.find((entry) => entry.status === "READY")?.id ?? null;
 
   return (
     <main className="min-h-screen bg-gradient-flow-light px-6 py-16">
@@ -91,6 +109,14 @@ export default async function DashboardPage() {
               history={reportHistory}
               nextReportAvailableAt={nextReportAvailableAt}
               reportValidityDays={limits.reportValidityDays}
+            />
+          }
+          sharing={
+            <SharingPanel
+              latestReadyReportJobId={latestReadyReportJobId}
+              initialShares={initialShares}
+              maxActiveShares={MAX_ACTIVE_SHARES_PER_REPORT}
+              maxShareExpiryDays={MAX_SHARE_EXPIRY_DAYS}
             />
           }
           account={
