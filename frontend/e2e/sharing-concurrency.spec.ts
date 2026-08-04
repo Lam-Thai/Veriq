@@ -1,6 +1,6 @@
 import { randomInt } from "node:crypto";
 import { test, expect } from "./helpers/db-test";
-import { createTestUser, deleteTestUser } from "@/test/factories/user";
+import { createTestUser, createTestDbUser, deleteTestUser, deleteTestDbUser } from "@/test/factories/user";
 import { createTestReportJob } from "@/test/factories/report-job";
 import { createTestShare } from "@/test/factories/share";
 import { signInAs } from "./helpers/auth";
@@ -78,7 +78,8 @@ const FIRST_VIEW_CONCURRENCY = 10;
  */
 test.describe("first-view email gate — concurrency", () => {
   test("firstViewedAt is claimed exactly once under concurrent /verify views", async ({ request }) => {
-    const owner = await createTestUser();
+    // `/verify/[token]` is public — nothing here signs in, so the owner needs no Clerk identity.
+    const owner = await createTestDbUser();
     try {
       const reportJob = await createTestReportJob(owner.userId);
       const share = await createTestShare(reportJob.id, owner.userId);
@@ -106,7 +107,7 @@ test.describe("first-view email gate — concurrency", () => {
       const viewCount = await testDb.reportShareView.count({ where: { reportShareId: share.id } });
       expect(viewCount).toBe(FIRST_VIEW_CONCURRENCY);
     } finally {
-      await deleteTestUser(owner.userId, owner.clerkId);
+      await deleteTestDbUser(owner.userId);
     }
   });
 });

@@ -43,6 +43,30 @@ function retryAfterSeconds(headers: Record<string, string>): number {
   return Number(headers["retry-after"]);
 }
 
+/**
+ * Gap between iterations in the three *authenticated* loops below. Not cosmetic, and not a flake
+ * workaround — it's throttling a third-party dependency.
+ *
+ * Every authenticated request the app serves calls `currentUser()` in its route handler, and that
+ * is a Clerk Backend API fetch (unlike `auth()`, which verifies the session JWT locally). So the
+ * VIEWS loop, which must exceed a limit of 60, puts 61 Clerk API calls on the wire — and fired back
+ * to back that reliably trips Clerk's own rate limit on the shared test instance. When it does, the
+ * handler's `currentUser()` throws inside its try block and the route returns `ApiError.internal()`,
+ * so the assertion fails with "Expected 429, Received 500" — a failure that looks like the limiter
+ * under test is broken when nothing about it is. (Seen in CI on PR #50 after two runs landed close
+ * together; the identical code had passed on the previous run.)
+ *
+ * Pacing at ~120ms keeps this under roughly 8 requests/sec. The property under test is unaffected:
+ * each limiter's window is 60s (600s for create), and even the 61-iteration loop finishes in ~10s,
+ * so every request still lands inside one window and the fixed-window counter trips exactly as it
+ * would have unpaced.
+ */
+const REQUEST_PACING_MS = 120;
+
+function pace(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, REQUEST_PACING_MS));
+}
+
 test.describe("rate limiting — 429 + Retry-After", () => {
   test("POST /api/report/shares returns 429 with Retry-After once CREATE_LIMIT is exceeded", async ({ page }) => {
     const owner = await createTestUser();
@@ -56,6 +80,7 @@ test.describe("rate limiting — 429 + Retry-After", () => {
       // here, and a strictly-ordered loop is what guarantees the (CREATE_LIMIT + 1)-th call is the
       // one that observes the limit already exhausted, rather than racing the counter itself.
       for (let i = 0; i < CREATE_LIMIT + 1; i++) {
+        if (i > 0) await pace();
         last = await page.request.post("/api/report/shares", { data: { reportJobId: reportJob.id, expiresAt } });
       }
 
@@ -77,6 +102,7 @@ test.describe("rate limiting — 429 + Retry-After", () => {
 
       let last: Awaited<ReturnType<typeof page.request.delete>> | undefined;
       for (let i = 0; i < REVOKE_LIMIT + 1; i++) {
+        if (i > 0) await pace();
         // A fake share id is fine: the route checks the rate limit before the ownership/existence
         // lookup (app/api/report/shares/[id]/route.ts — auth, then checkRateLimit, then
         // getInternalUserId/revokeShare), so every one of these still consumes the limiter's bucket
@@ -103,6 +129,7 @@ test.describe("rate limiting — 429 + Retry-After", () => {
 
       let last: Awaited<ReturnType<typeof page.request.get>> | undefined;
       for (let i = 0; i < VIEWS_LIMIT + 1; i++) {
+        if (i > 0) await pace();
         // Same ordering as the DELETE case above: app/api/report/shares/[id]/views/route.ts checks
         // the rate limit before getInternalUserId/getViewsForShare, so a fake id still trips it.
         last = await page.request.get("/api/report/shares/nonexistent-share-id/views");

@@ -67,6 +67,12 @@ export default defineConfig({
       // config stays parallel-by-default.
       fullyParallel: false,
       workers: 1,
+      // Longer than the 30s default, which these specs legitimately outgrow: the rate-limit cases
+      // deliberately pace their request loops to avoid tripping Clerk's Backend API limit (see
+      // REQUEST_PACING_MS in sharing-rate-limit.spec.ts), so the 61-iteration one runs ~10s of
+      // real traffic before it can even assert, and a Clerk 429 anywhere adds a backoff wait on top
+      // (withClerkRetry, e2e/helpers/auth.ts). 30s leaves no room for either.
+      timeout: 60_000,
     },
   ],
   webServer: {

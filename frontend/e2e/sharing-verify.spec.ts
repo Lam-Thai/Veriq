@@ -1,6 +1,6 @@
 import { randomInt } from "node:crypto";
 import { test, expect } from "./helpers/db-test";
-import { createTestUser, deleteTestUser } from "@/test/factories/user";
+import { createTestDbUser, deleteTestDbUser } from "@/test/factories/user";
 import { createTestReportJob } from "@/test/factories/report-job";
 import { createTestShare } from "@/test/factories/share";
 import { testDb } from "@/test/helpers/db";
@@ -50,7 +50,7 @@ test.describe("/verify/[token] — malformed token", () => {
 
 test.describe("/verify/[token] — real share states", () => {
   test("active share renders the report and records a view", async ({ page, context }) => {
-    const owner = await createTestUser();
+    const owner = await createTestDbUser();
     try {
       const reportJob = await createTestReportJob(owner.userId);
       const share = await createTestShare(reportJob.id, owner.userId);
@@ -71,12 +71,12 @@ test.describe("/verify/[token] — real share states", () => {
       const dbShare = await testDb.reportShare.findUniqueOrThrow({ where: { id: share.id } });
       expect(dbShare.firstViewedAt).not.toBeNull();
     } finally {
-      await deleteTestUser(owner.userId, owner.clerkId);
+      await deleteTestDbUser(owner.userId);
     }
   });
 
   test("expired share renders the friendly expired state, not the report", async ({ page, context }) => {
-    const owner = await createTestUser();
+    const owner = await createTestDbUser();
     try {
       const reportJob = await createTestReportJob(owner.userId);
       // A past expiresAt — resolveShareStatus (app/verify/[token]/page.tsx) reads this against
@@ -91,12 +91,12 @@ test.describe("/verify/[token] — real share states", () => {
       await expect(page.getByRole("heading", { name: "This link has expired." })).toBeVisible();
       await expect(page.getByRole("heading", { name: "Verified income report" })).toHaveCount(0);
     } finally {
-      await deleteTestUser(owner.userId, owner.clerkId);
+      await deleteTestDbUser(owner.userId);
     }
   });
 
   test("revoked share renders the friendly revoked state, not the report", async ({ page, context }) => {
-    const owner = await createTestUser();
+    const owner = await createTestDbUser();
     try {
       const reportJob = await createTestReportJob(owner.userId);
       const share = await createTestShare(reportJob.id, owner.userId, { revokedAt: new Date() });
@@ -107,7 +107,7 @@ test.describe("/verify/[token] — real share states", () => {
       await expect(page.getByRole("heading", { name: "This link was revoked by the report owner." })).toBeVisible();
       await expect(page.getByRole("heading", { name: "Verified income report" })).toHaveCount(0);
     } finally {
-      await deleteTestUser(owner.userId, owner.clerkId);
+      await deleteTestDbUser(owner.userId);
     }
   });
 });

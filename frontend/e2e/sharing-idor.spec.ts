@@ -1,5 +1,5 @@
 import { test, expect } from "./helpers/db-test";
-import { createTestUser, deleteTestUser } from "@/test/factories/user";
+import { createTestUser, createTestDbUser, deleteTestUser, deleteTestDbUser } from "@/test/factories/user";
 import { createTestReportJob } from "@/test/factories/report-job";
 import { createTestShare } from "@/test/factories/share";
 import { signInAs } from "./helpers/auth";
@@ -17,7 +17,10 @@ test.describe("IDOR — report shares", () => {
   test("another user's DELETE and GET views on my share both 404, and my share stays active", async ({
     browser,
   }) => {
-    const owner = await createTestUser();
+    // Only the attacker ever signs in — the owner exists purely to own the report/share rows, so
+    // it needs no Clerk identity (see createTestDbUser's doc comment on the shared instance's
+    // Backend API budget).
+    const owner = await createTestDbUser();
     const attacker = await createTestUser();
 
     try {
@@ -49,7 +52,7 @@ test.describe("IDOR — report shares", () => {
       const dbShare = await testDb.reportShare.findUniqueOrThrow({ where: { id: share.id } });
       expect(dbShare.revokedAt).toBeNull();
     } finally {
-      await deleteTestUser(owner.userId, owner.clerkId);
+      await deleteTestDbUser(owner.userId);
       await deleteTestUser(attacker.userId, attacker.clerkId);
     }
   });

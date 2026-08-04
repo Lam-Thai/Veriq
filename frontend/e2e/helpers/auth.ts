@@ -17,15 +17,64 @@ export type ClerkTestUser = {
   password: string;
 };
 
+const MAX_CLERK_RETRIES = 3;
+/** Ceiling on a single backoff wait. Clerk's 429s have come back with `retryAfter: 10` (seconds),
+ * and blindly honouring that twice would blow past even the extended per-test timeout — so cap the
+ * wait and let the attempt budget run out instead of stalling the whole suite on one call. */
+const MAX_CLERK_BACKOFF_MS = 6_000;
+
+/**
+ * Retries a Clerk Backend API call on 429 with exponential backoff + jitter, honouring the
+ * `retryAfter` the error carries when it's within `MAX_CLERK_BACKOFF_MS`.
+ *
+ * This exists because the whole suite shares one Clerk test instance and that instance's Backend
+ * API is genuinely rate-limited: every authenticated request the *app* serves calls `currentUser()`
+ * (which is a Backend API fetch, unlike `auth()`'s local JWT verify), so a spec like
+ * sharing-rate-limit's VIEWS case — 61 requests to trip a limit of 60 — puts 61 Clerk calls on the
+ * wire by itself, on top of the harness's own create/delete traffic. Observed failure mode when
+ * that budget runs out is two-headed and easy to misread: the harness's `users.createUser` throws
+ * `ClerkAPIResponseError: Too Many Requests`, *and* the app's own routes start returning 500
+ * (`currentUser()` throws inside the handler's try, which returns `ApiError.internal()`), so a
+ * rate-limit spec fails with "Expected 429, Received 500" for a reason that has nothing to do with
+ * the limiter under test. Mirrors the retry/backoff `@clerk/testing` already applies to its own
+ * testing-token fetch.
+ *
+ * Retries only 429 — a 4xx from a malformed request or a 5xx from Clerk should surface immediately,
+ * not be masked by three more attempts.
+ */
+async function withClerkRetry<T>(operation: () => Promise<T>, label: string): Promise<T> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await operation();
+    } catch (err) {
+      const status = (err as { status?: number }).status;
+      if (status !== 429 || attempt >= MAX_CLERK_RETRIES) throw err;
+
+      const retryAfterMs = (err as { retryAfter?: number }).retryAfter;
+      const backoffMs = Math.min(
+        retryAfterMs != null ? retryAfterMs * 1_000 : 500 * 2 ** attempt,
+        MAX_CLERK_BACKOFF_MS,
+      );
+      const waitMs = backoffMs + Math.random() * 250;
+      console.warn(
+        `[e2e/helpers/auth] Clerk 429 on ${label}, attempt ${attempt + 1}/${MAX_CLERK_RETRIES} — ` +
+          `waiting ${Math.round(waitMs)}ms`,
+      );
+      await new Promise((resolve) => setTimeout(resolve, waitMs));
+    }
+  }
+}
+
 /**
  * Creates a real user on the shared Clerk test-mode instance via the Backend API. Uses the
  * `+clerk_test@example.com` convention Clerk documents for E2E fixtures: emails matching that
  * pattern never actually get sent (verification codes, "new device" notices, etc. are all
  * suppressed instance-side), so this never risks leaking test traffic to a real inbox.
  *
- * Returns the raw password alongside the Clerk user id/email — `signInAs` needs it for the
- * `password` sign-in strategy, and the phase-5 factories module composes this with a `db.user.create`
- * call to stitch the Clerk identity to an internal `User` row (no webhook does that here).
+ * Only for specs that actually sign in. A spec that just needs a row to hang fixtures off (the
+ * public `/verify/[token]` cases, or the *owner* side of an IDOR test where only the attacker
+ * signs in) should use `createTestDbUser` from `@/test/factories/user` instead — it skips Clerk
+ * entirely, which is the single biggest lever on this suite's Backend API budget.
  */
 export async function createClerkTestUser(): Promise<ClerkTestUser> {
   const suffix = randomBytes(6).toString("hex");
@@ -37,11 +86,10 @@ export async function createClerkTestUser(): Promise<ClerkTestUser> {
   const password = randomBytes(24).toString("base64url");
 
   const client = await clerkClient();
-  const user = await client.users.createUser({
-    emailAddress: [email],
-    password,
-    skipPasswordChecks: true,
-  });
+  const user = await withClerkRetry(
+    () => client.users.createUser({ emailAddress: [email], password, skipPasswordChecks: true }),
+    "users.createUser",
+  );
 
   return { clerkId: user.id, email, password };
 }
@@ -97,7 +145,10 @@ export async function signInAs(page: Page, testUser: Pick<ClerkTestUser, "email"
 export async function deleteClerkTestUser(clerkId: string): Promise<void> {
   try {
     const client = await clerkClient();
-    await client.users.deleteUser(clerkId);
+    // Retried like creation: a 429 here is non-fatal to the test that already passed, but a
+    // swallowed one leaks a user onto the shared instance permanently, and enough of those make
+    // the next run's rate-limit headroom worse. Better to back off and actually land the delete.
+    await withClerkRetry(() => client.users.deleteUser(clerkId), "users.deleteUser");
   } catch (err) {
     console.warn(`[e2e/helpers/auth] failed to delete Clerk test user ${clerkId} (non-fatal):`, err);
   }
