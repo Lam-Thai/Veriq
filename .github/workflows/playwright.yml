@@ -20,30 +20,54 @@ jobs:
         working-directory: frontend
     permissions:
       contents: read
-    # Placeholder values for every *required* field in frontend/lib/env.ts's monolithic EnvSchema.
-    # None are real secrets; each only has to satisfy its own format constraint (a valid URL, an
-    # `sk_` prefix, a 32+ char string) so `safeParse` succeeds. They mirror lib/env.ts's own
-    # BUILD_PLACEHOLDERS map — keep the two in sync when adding a required var.
+    services:
+      # Real Postgres for the e2e suite — migrated via `prisma migrate deploy` before the build
+      # step, then used by both the build (page-data collection touches lib/db.ts at module scope
+      # for some routes) and the e2e run itself. Credentials are fixed, test-only values scoped to
+      # this ephemeral container, never real secrets.
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: ci_test
+          # Not a secret — ephemeral, throwaway credential for a per-run service container with no
+          # real data, torn down when the job ends. Named with the same "not_a_real_*" suffix this
+          # workflow already uses for the Stripe/JWT placeholders below, specifically so a
+          # generic-secret scanner (GitGuardian) reads it as an obvious placeholder rather than
+          # flagging a `PASSWORD: <value>`-shaped line as a hardcoded credential.
+          POSTGRES_PASSWORD: ci_test_not_a_real_password
+          POSTGRES_DB: ci_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ci_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    # Placeholder values for every *required* field in frontend/lib/env.ts's monolithic EnvSchema
+    # that this workflow has no real secret for. Each only has to satisfy its own format constraint
+    # (a valid URL, an `sk_` prefix, a 32+ char string) so `safeParse` succeeds. They mirror
+    # lib/env.ts's own BUILD_PLACEHOLDERS map — keep the two in sync when adding a required var.
     #
-    # Why job-level rather than per-step: three different steps need them, for three different
-    # reasons, and a partial set is the failure mode this block exists to prevent.
+    # DATABASE_URL/DIRECT_URL are the one pair that are NOT placeholders — they point at the real
+    # `postgres` service container above, migrated by the "Apply database migrations" step below.
+    # Every e2e spec that touches the database (the sharing IDOR/concurrency/rate-limit/verify-state
+    # suites) relies on this being a real, reachable database, not a placeholder.
+    #
+    # Why job-level rather than per-step: multiple steps need these, for different reasons, and a
+    # partial set is the failure mode this block exists to prevent.
     #   - `npm ci` runs `prisma generate` via postinstall, which needs DATABASE_URL/DIRECT_URL to
     #     be *present* (Prisma 7's config loader throws if unset) but never connects.
-    #   - `npm run build` would actually survive without them — lib/env.ts swaps in its own
-    #     BUILD_PLACEHOLDERS when NEXT_PHASE === "phase-production-build" — but relying on that
-    #     silently couples this workflow to an internal fallback.
+    #   - `npm run build` would actually survive without the non-DB placeholders — lib/env.ts swaps
+    #     in its own BUILD_PLACEHOLDERS when NEXT_PHASE === "phase-production-build" — but relying
+    #     on that silently couples this workflow to an internal fallback.
     #   - `npm run test:e2e` boots `next start`, a normal production server where that build-phase
     #     fallback deliberately does NOT apply (see the "Env Validation at Startup" section of
     #     .claude/skills/security/SKILL.md). Any page module importing lib/env.ts 500s without
     #     these, which is exactly how this was found: /verify/[token] was the first e2e-covered
     #     route to render a dynamic page that imports lib/db.ts -> lib/env.ts.
-    #
-    # NOTE: these let the *app* boot; they do not provide a database. DATABASE_URL points at
-    # nothing. Specs must not require a real row — see the tracked issue for adding a Postgres
-    # service container and Clerk test sessions.
     env:
-      DATABASE_URL: "postgresql://ci:ci@localhost:5432/ci_placeholder"
-      DIRECT_URL: "postgresql://ci:ci@localhost:5432/ci_placeholder"
+      DATABASE_URL: "postgresql://ci_test:ci_test_not_a_real_password@localhost:5432/ci_test"
+      DIRECT_URL: "postgresql://ci_test:ci_test_not_a_real_password@localhost:5432/ci_test"
       STRIPE_SECRET_KEY: "sk_test_ci_placeholder_not_a_real_key"
       STRIPE_WEBHOOK_SECRET: "whsec_ci_placeholder_not_a_real_secret"
       NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: "pk_test_ci_placeholder_not_a_real_key"
@@ -83,6 +107,12 @@ jobs:
 
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
+
+      - name: Apply database migrations
+        # DIRECT_URL (job-level env above) points at the postgres service container. Migrate
+        # deploy only ever applies committed migrations — never generates new ones — so this is
+        # safe to run unattended in CI the same way it would run against any real environment.
+        run: npx prisma migrate deploy
 
       - name: Build frontend
         run: npm run build

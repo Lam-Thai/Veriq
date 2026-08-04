@@ -223,14 +223,32 @@ The workflow only runs on `pull_request` (never `pull_request_target`), so the s
 
 ## CI: End-to-end tests
 
-Every pull request runs the Playwright e2e suite (`.github/workflows/playwright.yml`) against a production build of the frontend. The workflow installs dependencies and Chromium reproducibly (`npm ci`, `npx playwright install --with-deps chromium`), builds the app (`npm run build`), then runs `npm run test:e2e`. The HTML report is uploaded as a build artifact on every run except when the job is cancelled, so both passing and failing runs can be inspected.
+Every pull request runs the Playwright e2e suite (`.github/workflows/playwright.yml`) against a production build of the frontend, backed by a real `postgres:17-alpine` service container. The workflow installs dependencies and Chromium reproducibly (`npm ci`, `npx playwright install --with-deps chromium`), applies migrations against that container (`npx prisma migrate deploy`), builds the app (`npm run build`), then runs `npm run test:e2e`. The HTML report is uploaded as a build artifact on every run except when the job is cancelled, so both passing and failing runs can be inspected.
 
-Tests live under `frontend/e2e/` and are configured in `frontend/playwright.config.ts`. Add new smoke/e2e specs there as coverage grows.
+Tests live under `frontend/e2e/` and are configured in `frontend/playwright.config.ts`. A `setup` project (`frontend/e2e/global.setup.ts`) acquires a Clerk testing token before every other project runs, so specs can sign in as a real test user via `frontend/e2e/helpers/auth.ts`. Add new smoke/e2e specs there as coverage grows.
 
-**Required secrets:** the frontend is wrapped in Clerk's `ClerkProvider`/`clerkMiddleware`, which throw on every request in production mode (`next start`, used by this workflow) unless given real API keys — Clerk's zero-config "keyless mode" only works in local `next dev`. Without these secrets, the workflow fails on every PR:
+**Required secrets:** the frontend is wrapped in Clerk's `ClerkProvider`/`clerkMiddleware`, which throw on every request in production mode (`next start`, used by this workflow) unless given real API keys — Clerk's zero-config "keyless mode" only works in local `next dev`. The same instance also backs the authenticated e2e specs (test users are created/deleted against it via the Backend API — see `frontend/e2e/helpers/auth.ts`). Without these secrets, the workflow fails on every PR:
 
 1. Create a free Clerk application (or reuse an existing test instance) at the [Clerk dashboard](https://dashboard.clerk.com).
 2. In GitHub, go to **Settings → Secrets and variables → Actions → New repository secret**.
 3. Add `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` (the `pk_test_...` value) and `CLERK_SECRET_KEY` (the `sk_test_...` value) — names must match exactly, since the workflow reads them by name.
 
 Use test-mode keys only — never a production Clerk instance's keys — since this workflow runs on every pull request, including from anyone with write access to the repo.
+
+### Running the DB-backed suite locally
+
+The e2e suite needs a real Postgres and real Clerk test-mode keys to exercise the DB-backed specs
+(report sharing's IDOR, cap-of-10, rate-limit, and `/verify/[token]` state coverage). One-time setup:
+
+```sh
+cd frontend
+cp .env.test.example .env.test.local   # then fill in the same Clerk test keys already in .env.local
+npm run db:test:up                     # starts a throwaway Postgres on localhost:5433 (docker compose --profile postgres)
+npm run db:test:migrate                # applies migrations against it
+npm run test:e2e:db                    # runs the full suite against .env.test.local
+```
+
+`.env.test.local` is git-ignored, same as `.env.local`. `npm run db:test:down` stops and removes the
+test-database container specifically, leaving any other compose services (backend, frontend) running.
+The Postgres data isn't persisted between runs — `db:test:migrate` is safe to re-run any time, and
+tests truncate their own tables before each run (`frontend/test/helpers/db.ts`).

@@ -45,31 +45,35 @@ services:
       backend:
         condition: service_healthy
 
-  # Reserved for the currently-paused Prisma/PostgreSQL persistence effort.
-  # Not started by a plain `docker compose up` — only with
-  # `docker compose --profile postgres up`. Uncomment and point
-  # DATABASE_URL/DIRECT_URL at this service in frontend/.env.local once that
-  # work lands.
+  # Ephemeral local Postgres for running the frontend's Playwright integration/E2E suite against a
+  # real database — mirrors the `postgres:17-alpine` service container
+  # `.github/workflows/playwright.yml` runs in CI. Not started by a plain `docker compose up` —
+  # only with `docker compose --profile postgres up`. Point DATABASE_URL/DIRECT_URL at this
+  # service from frontend/.env.test.local (see frontend/.env.test.example), never from
+  # frontend/.env.local, which stays pointed at the real Supabase dev database (see
+  # frontend/.env.example) — this service exists only for throwaway test runs.
   #
-  # Credentials come from ./postgres.env (see postgres.env.example) via
-  # env_file, the same pattern as backend/frontend above — deliberately not
-  # an inline `environment:` block, so this file never contains a
-  # `PASSWORD: <value>`-shaped line for a secret scanner to catch, even a
+  # No `volumes:` — deliberately non-persisted. frontend/test/helpers/db.ts truncates the
+  # sharing-related tables before each test, and `db:test:migrate` re-applies migrations on
+  # demand, so surviving a `docker compose down` isn't load-bearing for a database that only ever
+  # holds data for the duration of a test run.
+  #
+  # Host port 5433, not 5432, so this doesn't collide with a developer's own local Postgres
+  # install if they have one; frontend/.env.test.example's DATABASE_URL/DIRECT_URL match.
+  #
+  # Credentials come from ./postgres.env (see postgres.env.example) via env_file, the same
+  # pattern as backend/frontend above — deliberately not an inline `environment:` block, so this
+  # file never contains a `PASSWORD: <value>`-shaped line for a secret scanner to catch, even a
   # throwaway local one behind a variable reference.
-  # postgres:
-  #   image: postgres:17-alpine
-  #   profiles: ["postgres"]
-  #   env_file:
-  #     - ./postgres.env
-  #   ports:
-  #     - "5432:5432"
-  #   volumes:
-  #     - postgres_data:/var/lib/postgresql/data
-  #   healthcheck:
-  #     test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER}"]
-  #     interval: 10s
-  #     timeout: 3s
-  #     retries: 5
-
-# volumes:
-#   postgres_data:
+  postgres:
+    image: postgres:17-alpine
+    profiles: ["postgres"]
+    env_file:
+      - ./postgres.env
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER}"]
+      interval: 10s
+      timeout: 3s
+      retries: 5

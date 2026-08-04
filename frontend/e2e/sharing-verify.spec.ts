@@ -1,15 +1,27 @@
-import { test, expect } from "@playwright/test";
+import { randomInt } from "node:crypto";
+import { test, expect } from "./helpers/db-test";
+import { createTestDbUser, deleteTestDbUser } from "@/test/factories/user";
+import { createTestReportJob } from "@/test/factories/report-job";
+import { createTestShare } from "@/test/factories/share";
+import { testDb } from "@/test/helpers/db";
 
-// This repo's Playwright CI job runs `next build` + `next start` against a placeholder
-// DATABASE_URL with no real Postgres service (see .github/workflows/playwright.yml), and there is
-// no Clerk test-session infrastructure (see e2e/dashboard.spec.ts's own note on the same gap). That
-// means there is no way to seed a real ReportShare row here, so this spec only covers the one state
-// that needs zero DB access: a malformed token short-circuits in getShareByToken's
-// SHARE_TOKEN_PATTERN check (lib/report-shares.ts) before any query is attempted, rendering the
-// generic "This link isn't valid." message. The found/active, found/expired, and found/revoked
-// states (app/verify/[token]/page.tsx's other three branches) all require a real ReportShare row
-// backed by a real ReportJob and are integration-test territory once Postgres is available in CI —
-// not built here, per the same constraint the approved plan documents.
+// A real test Postgres now exists in CI and locally (test/helpers/db.ts, test/factories/*), so the
+// found/active, found/expired, and found/revoked states below (app/verify/[token]/page.tsx's other
+// three branches) are no longer out of reach — the "integration-test territory... not built here"
+// framing this comment used to carry is now false. The malformed-token tests immediately below are
+// unchanged: a malformed token still short-circuits in getShareByToken's SHARE_TOKEN_PATTERN check
+// (lib/report-shares.ts) before any query is attempted, so they need no DB seed either way.
+
+/** Unique-per-test synthetic caller IP. The verify page's LOOKUP_RATE_LIMIT (60/60s, keyed per-IP
+ * in lib/rate-limit.ts's module-scoped `buckets` Map) lives for the lifetime of the `next start`
+ * server, not per test — an isolated IP keeps each of this file's DB-backed tests below from
+ * tripping, or being tripped by, sharing-rate-limit.spec.ts's dedicated test for that same limiter,
+ * or by each other, regardless of run order. clientIpFromHeaders (lib/ip-privacy.ts) trusts
+ * x-forwarded-for verbatim with no proxy-trust check, which is exactly what makes this safe to do
+ * from test code — see the approved plan's ip-privacy research note. */
+function syntheticIp(): string {
+  return `10.88.${randomInt(0, 255)}.${randomInt(1, 254)}`;
+}
 
 test.describe("/verify/[token] — malformed token", () => {
   test("renders the generic invalid-link message for an obviously malformed token", async ({ page }) => {
@@ -33,5 +45,69 @@ test.describe("/verify/[token] — malformed token", () => {
     const robotsMeta = page.locator('meta[name="robots"]');
     await expect(robotsMeta).toHaveAttribute("content", /noindex/);
     await expect(robotsMeta).toHaveAttribute("content", /nofollow/);
+  });
+});
+
+test.describe("/verify/[token] — real share states", () => {
+  test("active share renders the report and records a view", async ({ page, context }) => {
+    const owner = await createTestDbUser();
+    try {
+      const reportJob = await createTestReportJob(owner.userId);
+      const share = await createTestShare(reportJob.id, owner.userId);
+
+      await context.setExtraHTTPHeaders({ "X-Forwarded-For": syntheticIp() });
+      const response = await page.goto(`/verify/${share.rawToken}`);
+      expect(response?.ok()).toBeTruthy();
+
+      await expect(page.getByRole("heading", { name: "Verified income report" })).toBeVisible();
+      await expect(page.getByRole("link", { name: "Download PDF" })).toBeVisible();
+
+      // The render itself is the thing being proven "real" (as opposed to a static/cached page) —
+      // a fresh ReportShareView row and a claimed firstViewedAt are the DB-visible proof this exact
+      // request actually ran recordView (lib/report-shares.ts), not just that the UI happens to
+      // look right.
+      const viewCount = await testDb.reportShareView.count({ where: { reportShareId: share.id } });
+      expect(viewCount).toBe(1);
+      const dbShare = await testDb.reportShare.findUniqueOrThrow({ where: { id: share.id } });
+      expect(dbShare.firstViewedAt).not.toBeNull();
+    } finally {
+      await deleteTestDbUser(owner.userId);
+    }
+  });
+
+  test("expired share renders the friendly expired state, not the report", async ({ page, context }) => {
+    const owner = await createTestDbUser();
+    try {
+      const reportJob = await createTestReportJob(owner.userId);
+      // A past expiresAt — resolveShareStatus (app/verify/[token]/page.tsx) reads this against
+      // `Date.now()` at request time, so any already-past timestamp exercises the "expired" branch.
+      const share = await createTestShare(reportJob.id, owner.userId, {
+        expiresAt: new Date(Date.now() - 24 * 60 * 60 * 1000),
+      });
+
+      await context.setExtraHTTPHeaders({ "X-Forwarded-For": syntheticIp() });
+      await page.goto(`/verify/${share.rawToken}`);
+
+      await expect(page.getByRole("heading", { name: "This link has expired." })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Verified income report" })).toHaveCount(0);
+    } finally {
+      await deleteTestDbUser(owner.userId);
+    }
+  });
+
+  test("revoked share renders the friendly revoked state, not the report", async ({ page, context }) => {
+    const owner = await createTestDbUser();
+    try {
+      const reportJob = await createTestReportJob(owner.userId);
+      const share = await createTestShare(reportJob.id, owner.userId, { revokedAt: new Date() });
+
+      await context.setExtraHTTPHeaders({ "X-Forwarded-For": syntheticIp() });
+      await page.goto(`/verify/${share.rawToken}`);
+
+      await expect(page.getByRole("heading", { name: "This link was revoked by the report owner." })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Verified income report" })).toHaveCount(0);
+    } finally {
+      await deleteTestDbUser(owner.userId);
+    }
   });
 });

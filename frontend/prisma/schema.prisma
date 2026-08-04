@@ -2,8 +2,14 @@
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
 generator client {
-  provider = "prisma-client"
-  output   = "../lib/generated/prisma"
+  provider     = "prisma-client"
+  output       = "../lib/generated/prisma"
+  // Prisma 7's `prisma-client` generator defaults to ESM output (`import.meta.url` for
+  // path resolution) — fine for Next.js's own bundler, but Playwright's plain-Node test
+  // loader (frontend/test/helpers/db.ts, the e2e integration harness) can't `require()` real
+  // ESM syntax. This package has no "type": "module", so pin the generated client to CJS to
+  // match. See https://www.prisma.io/docs/orm/prisma-schema/overview/generators.
+  moduleFormat = "cjs"
 }
 
 datasource db {
