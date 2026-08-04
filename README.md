@@ -248,6 +248,7 @@ npm run db:test:migrate                # applies migrations against it
 npm run test:e2e:db                    # runs the full suite against .env.test.local
 ```
 
-`.env.test.local` is git-ignored, same as `.env.local`. `npm run db:test:down` stops the container.
+`.env.test.local` is git-ignored, same as `.env.local`. `npm run db:test:down` stops and removes the
+test-database container specifically, leaving any other compose services (backend, frontend) running.
 The Postgres data isn't persisted between runs — `db:test:migrate` is safe to re-run any time, and
 tests truncate their own tables before each run (`frontend/test/helpers/db.ts`).

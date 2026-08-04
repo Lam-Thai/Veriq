@@ -44,6 +44,30 @@ function retryAfterSeconds(headers: Record<string, string>): number {
 }
 
 /**
+ * Asserts the limiter tripped *exactly once, on the very last request*, and that the 429 carries a
+ * usable `Retry-After`.
+ *
+ * The "exactly one" half is what pins the configured threshold. Asserting only that the final
+ * response is a 429 (which is all these tests used to do) passes just as happily against a limiter
+ * that rejected every request from the first one onward — so it would have proven the route can
+ * emit 429, not that it emits 429 *at the right point*. Requiring every earlier response to be
+ * something other than 429 is what makes the limit value itself part of the contract under test.
+ *
+ * Deliberately does not assert what the earlier statuses *are* — that differs per route by design
+ * (the create loop sees 201s then 409s once the cap-of-10 kicks in; the revoke/views loops see 404s
+ * throughout, since their limiter runs before the ownership lookup). Pinning those here would
+ * couple this to unrelated behaviour each route already has its own test for.
+ */
+function expectLimiterTrippedOnlyOnLastRequest(statuses: number[], lastHeaders: Record<string, string>): void {
+  expect(statuses.filter((status) => status === 429)).toHaveLength(1);
+  expect(statuses.at(-1)).toBe(429);
+
+  const retryAfter = retryAfterSeconds(lastHeaders);
+  expect(Number.isInteger(retryAfter)).toBe(true);
+  expect(retryAfter).toBeGreaterThan(0);
+}
+
+/**
  * Gap between iterations in the three *authenticated* loops below. Not cosmetic, and not a flake
  * workaround — it's throttling a third-party dependency.
  *
@@ -75,19 +99,21 @@ test.describe("rate limiting — 429 + Retry-After", () => {
       await signInAs(page, owner);
 
       const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
-      let last: Awaited<ReturnType<typeof page.request.post>> | undefined;
+      const statuses: number[] = [];
+      let lastHeaders: Record<string, string> = {};
       // Sequential, not concurrent — checkRateLimit's fixed-window counter is what's under test
       // here, and a strictly-ordered loop is what guarantees the (CREATE_LIMIT + 1)-th call is the
       // one that observes the limit already exhausted, rather than racing the counter itself.
       for (let i = 0; i < CREATE_LIMIT + 1; i++) {
         if (i > 0) await pace();
-        last = await page.request.post("/api/report/shares", { data: { reportJobId: reportJob.id, expiresAt } });
+        const res = await page.request.post("/api/report/shares", {
+          data: { reportJobId: reportJob.id, expiresAt },
+        });
+        statuses.push(res.status());
+        lastHeaders = res.headers();
       }
 
-      expect(last!.status()).toBe(429);
-      const retryAfter = retryAfterSeconds(last!.headers());
-      expect(Number.isInteger(retryAfter)).toBe(true);
-      expect(retryAfter).toBeGreaterThan(0);
+      expectLimiterTrippedOnlyOnLastRequest(statuses, lastHeaders);
     } finally {
       await deleteTestUser(owner.userId, owner.clerkId);
     }
@@ -100,7 +126,8 @@ test.describe("rate limiting — 429 + Retry-After", () => {
     try {
       await signInAs(page, owner);
 
-      let last: Awaited<ReturnType<typeof page.request.delete>> | undefined;
+      const statuses: number[] = [];
+      let lastHeaders: Record<string, string> = {};
       for (let i = 0; i < REVOKE_LIMIT + 1; i++) {
         if (i > 0) await pace();
         // A fake share id is fine: the route checks the rate limit before the ownership/existence
@@ -108,13 +135,12 @@ test.describe("rate limiting — 429 + Retry-After", () => {
         // getInternalUserId/revokeShare), so every one of these still consumes the limiter's bucket
         // even though none of them would ever revoke a real share. This trips the limiter itself,
         // not a wall of 404s that happen to also be 404s for an unrelated reason.
-        last = await page.request.delete("/api/report/shares/nonexistent-share-id");
+        const res = await page.request.delete("/api/report/shares/nonexistent-share-id");
+        statuses.push(res.status());
+        lastHeaders = res.headers();
       }
 
-      expect(last!.status()).toBe(429);
-      const retryAfter = retryAfterSeconds(last!.headers());
-      expect(Number.isInteger(retryAfter)).toBe(true);
-      expect(retryAfter).toBeGreaterThan(0);
+      expectLimiterTrippedOnlyOnLastRequest(statuses, lastHeaders);
     } finally {
       await deleteTestUser(owner.userId, owner.clerkId);
     }
@@ -127,18 +153,18 @@ test.describe("rate limiting — 429 + Retry-After", () => {
     try {
       await signInAs(page, owner);
 
-      let last: Awaited<ReturnType<typeof page.request.get>> | undefined;
+      const statuses: number[] = [];
+      let lastHeaders: Record<string, string> = {};
       for (let i = 0; i < VIEWS_LIMIT + 1; i++) {
         if (i > 0) await pace();
         // Same ordering as the DELETE case above: app/api/report/shares/[id]/views/route.ts checks
         // the rate limit before getInternalUserId/getViewsForShare, so a fake id still trips it.
-        last = await page.request.get("/api/report/shares/nonexistent-share-id/views");
+        const res = await page.request.get("/api/report/shares/nonexistent-share-id/views");
+        statuses.push(res.status());
+        lastHeaders = res.headers();
       }
 
-      expect(last!.status()).toBe(429);
-      const retryAfter = retryAfterSeconds(last!.headers());
-      expect(Number.isInteger(retryAfter)).toBe(true);
-      expect(retryAfter).toBeGreaterThan(0);
+      expectLimiterTrippedOnlyOnLastRequest(statuses, lastHeaders);
     } finally {
       await deleteTestUser(owner.userId, owner.clerkId);
     }
@@ -150,14 +176,16 @@ test.describe("rate limiting — 429 + Retry-After", () => {
     const ip = syntheticIp();
     const token = wellFormedUnknownToken();
 
-    let last: Awaited<ReturnType<typeof request.get>> | undefined;
+    // No pacing here, unlike the three above: this route is unauthenticated, so it never calls
+    // `currentUser()` and puts no load on Clerk's Backend API.
+    const statuses: number[] = [];
+    let lastHeaders: Record<string, string> = {};
     for (let i = 0; i < LOOKUP_RATE_LIMIT + 1; i++) {
-      last = await request.get(`/api/verify/${token}/download`, { headers: { "X-Forwarded-For": ip } });
+      const res = await request.get(`/api/verify/${token}/download`, { headers: { "X-Forwarded-For": ip } });
+      statuses.push(res.status());
+      lastHeaders = res.headers();
     }
 
-    expect(last!.status()).toBe(429);
-    const retryAfter = retryAfterSeconds(last!.headers());
-    expect(Number.isInteger(retryAfter)).toBe(true);
-    expect(retryAfter).toBeGreaterThan(0);
+    expectLimiterTrippedOnlyOnLastRequest(statuses, lastHeaders);
   });
 });

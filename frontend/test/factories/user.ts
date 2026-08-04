@@ -22,10 +22,22 @@ export type TestUser = {
 export async function createTestUser(): Promise<TestUser> {
   const { clerkId, email, password } = await createClerkTestUser();
 
-  const user = await testDb.user.create({
-    data: { clerkId, email },
-    select: { id: true },
-  });
+  let user: { id: string };
+  try {
+    user = await testDb.user.create({
+      data: { clerkId, email },
+      select: { id: true },
+    });
+  } catch (err) {
+    // The Clerk user already exists at this point, so a failed DB insert would strand it: no test
+    // holds a reference to clean it up, and `resetDb()`'s TRUNCATE only clears Postgres. Orphans
+    // accumulate on the shared test instance run after run and eat into the Backend API rate-limit
+    // headroom the suite depends on (see e2e/helpers/auth.ts's withClerkRetry). Undo the Clerk side
+    // before rethrowing — `deleteClerkTestUser` never throws, so the original error is what
+    // surfaces, not a teardown failure masking it.
+    await deleteClerkTestUser(clerkId);
+    throw err;
+  }
 
   return { userId: user.id, clerkId, email, password };
 }

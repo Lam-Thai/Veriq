@@ -1,21 +1,50 @@
 import { randomBytes } from "node:crypto";
 import type { Page } from "@playwright/test";
 import { clerk } from "@clerk/testing/playwright";
-import { clerkClient } from "@clerk/nextjs/server";
+import { createClerkClient } from "@clerk/backend";
 
 // Deliberately does NOT import "@/lib/env" or "@/lib/logger" — both transitively pull in the
 // `server-only` package, which throws unconditionally the moment it's `require()`'d outside of
 // Next.js's webpack build (Next's bundler special-cases it into a no-op for real Server
-// Components; Playwright's plain Node test runner has no such alias). `clerkClient` itself has no
-// such dependency, so it's safe to import directly here. Read `CLERK_SECRET_KEY` straight off
-// `process.env` — it's the same repo-secret-backed env var `clerkMiddleware`/`clerkClient` already
-// read (README.md's "CI: End-to-end tests" section), never written to a file, never logged.
+// Components; Playwright's plain Node test runner has no such alias).
+//
+// For the same reason this uses `@clerk/backend`'s framework-agnostic `createClerkClient` rather
+// than `clerkClient` from `@clerk/nextjs/server`: that export is built for Next server contexts
+// (request-scoped config resolution), and this file runs under Playwright's plain Node runner where
+// none of that exists. It happens to work today by falling through to env vars, but nothing
+// guarantees that across Clerk majors, and depending on it here contradicts the rule the paragraph
+// above exists to enforce. `@clerk/testing` resolves its own Backend API client exactly this way.
+//
+// `CLERK_SECRET_KEY` is read straight off `process.env` — the same repo-secret-backed var
+// `clerkMiddleware` already reads (README.md's "CI: End-to-end tests" section), never written to a
+// file, never logged.
 
 export type ClerkTestUser = {
   clerkId: string;
   email: string;
   password: string;
 };
+
+let cachedBackendClient: ReturnType<typeof createClerkClient> | undefined;
+
+/** Lazily-built Backend API client. Deliberately not constructed at module scope: every DB-backed
+ * spec imports this file transitively (via the factories), including the ones that never touch
+ * Clerk at all, and a module-scope construction would make a missing `CLERK_SECRET_KEY` fail those
+ * at import time rather than at the point of actual use. */
+function backendClient(): ReturnType<typeof createClerkClient> {
+  if (!cachedBackendClient) {
+    const secretKey = process.env.CLERK_SECRET_KEY;
+    if (!secretKey) {
+      throw new Error(
+        "[e2e/helpers/auth] CLERK_SECRET_KEY is not set — authenticated e2e specs need real " +
+          "Clerk test-mode credentials. Locally, populate frontend/.env.test.local and run via " +
+          "`npm run test:e2e:db`; in CI it comes from the repo secret of the same name.",
+      );
+    }
+    cachedBackendClient = createClerkClient({ secretKey });
+  }
+  return cachedBackendClient;
+}
 
 const MAX_CLERK_RETRIES = 3;
 /** Ceiling on a single backoff wait. Clerk's 429s have come back with `retryAfter: 10` (seconds),
@@ -85,7 +114,7 @@ export async function createClerkTestUser(): Promise<ClerkTestUser> {
   // succeeding in CI.
   const password = randomBytes(24).toString("base64url");
 
-  const client = await clerkClient();
+  const client = backendClient();
   const user = await withClerkRetry(
     () => client.users.createUser({ emailAddress: [email], password, skipPasswordChecks: true }),
     "users.createUser",
@@ -144,7 +173,7 @@ export async function signInAs(page: Page, testUser: Pick<ClerkTestUser, "email"
  */
 export async function deleteClerkTestUser(clerkId: string): Promise<void> {
   try {
-    const client = await clerkClient();
+    const client = backendClient();
     // Retried like creation: a 429 here is non-fatal to the test that already passed, but a
     // swallowed one leaks a user onto the shared instance permanently, and enough of those make
     // the next run's rate-limit headroom worse. Better to back off and actually land the delete.

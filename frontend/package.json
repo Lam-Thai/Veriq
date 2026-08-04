@@ -18,7 +18,7 @@
     "db:migrate": "prisma migrate dev",
     "db:studio": "prisma studio",
     "db:test:up": "cd .. && docker compose --profile postgres up -d",
-    "db:test:down": "cd .. && docker compose --profile postgres down",
+    "db:test:down": "cd .. && docker compose --profile postgres rm -sf postgres",
     "db:test:migrate": "dotenv -e .env.test.local -- prisma migrate deploy"
   },
   "dependencies": {
@@ -39,6 +39,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@clerk/backend": "^3.15.0",
     "@clerk/testing": "^2.2.15",
     "@playwright/test": "1.61.1",
     "@tailwindcss/postcss": "^4",
