@@ -38,10 +38,17 @@ The examples in this doc are the *target* patterns. What actually exists today:
   `frontend/.env.test.example`). Local run: `npm run db:test:up`, `npm run db:test:migrate`,
   `npm run test:e2e:db` (that last one is `dotenv -e .env.test.local -- playwright test`; a bare
   `npm run test:e2e` won't have a `DATABASE_URL`). What exists:
-  - `@/test/factories/user` — `createTestUser()` / `deleteTestUser(userId, clerkId)`. Creates the
-    Clerk user *and* the internal `User` row; nothing in the app stitches those together (no
-    webhook — `getInternalUserId` only ever does a `findUnique`), so the factory is the only place
-    that does.
+  - `@/test/factories/user` — two flavours, and picking the right one matters:
+    - `createTestUser()` / `deleteTestUser(userId, clerkId)` creates the Clerk user *and* the
+      internal `User` row; nothing in the app stitches those together (no webhook —
+      `getInternalUserId` only ever does a `findUnique`), so the factory is the only place that
+      does. Use it **only when the spec actually signs in.**
+    - `createTestDbUser()` / `deleteTestDbUser(userId)` creates just the `User` row, with a
+      synthetic `dbonly_*` `clerkId` that resolves to nothing. Use it whenever the spec never calls
+      `signInAs` — every public `/verify/[token]` case, and the *owner* side of an IDOR test where
+      only the attacker authenticates. The shared Clerk instance's Backend API is rate-limited and
+      the suite has already exhausted it once, so spending a real Clerk user on a test that never
+      authenticates is the thing to avoid.
   - `@/test/factories/report-job` — `createTestReportJob(userId, overrides?)`, defaults to `READY`
     with placeholder `pdfData`.
   - `@/test/factories/share` — `createTestShare(reportJobId, userId, overrides?)`, returns the raw
@@ -98,9 +105,16 @@ The examples in this doc are the *target* patterns. What actually exists today:
   there — it 500s, and your assertion fails on a missing element rather than on anything to do with
   your test. **If a new spec fails in CI but passes locally, check the workflow's env block before
   touching the spec.** See the `security` skill's "Env Validation at Startup" corollary.
-- Run e2e through `npm run test:e2e`, never a bare `npx playwright test` — `npx` may fetch a
-  different Playwright version than the installed `@playwright/test` and fail with a confusing
-  "did not expect test.describe() to be called here".
+- **Pick the e2e script by what the spec needs, and never run a bare `npx playwright test`.**
+  Locally, anything in the `chromium-db` project (the `DB_BACKED_SPECS` list) needs
+  `npm run test:e2e:db` — that's `dotenv -e .env.test.local -- playwright test`, which is what puts
+  a *test* `DATABASE_URL` in scope. `npm run test:e2e` is only right for the specs that touch
+  neither the database nor a session (`smoke`, `pricing`, `scroll-out`). Get it wrong and
+  `test/helpers/db.ts`'s guard stops the run rather than letting it touch the wrong database, so
+  this fails loudly, not silently — but reach for the right one. In CI the plain `npm run test:e2e`
+  is correct: the workflow supplies `DATABASE_URL` at job level for every step. Either way, never
+  `npx playwright test` — `npx` may fetch a different Playwright version than the installed
+  `@playwright/test` and fail with a confusing "did not expect test.describe() to be called here".
 
 ---
 
@@ -178,34 +192,43 @@ describe('calculateTotal', () => {
 ```ts
 // e2e/invoice-idor.spec.ts
 import { test, expect } from './helpers/db-test' // NOT @playwright/test — this adds resetDb()
-import { createTestUser, deleteTestUser } from '@/test/factories/user'
+import { createTestUser, createTestDbUser, deleteTestUser, deleteTestDbUser } from '@/test/factories/user'
 import { signInAs } from './helpers/auth'
 import { testDb } from '@/test/helpers/db'
 
 test("another user's invoice returns 404, not 403", async ({ browser }) => {
-  const owner = await createTestUser()
-  const attacker = await createTestUser()
+  // Owner never signs in — it only needs to own the row — so it costs no Clerk user.
+  const owner = await createTestDbUser()
+  // Nested scopes, not one flat try/finally over both: the attacker is created *inside* the
+  // owner's cleanup scope, so a throwing createTestUser can't strand the owner, and neither
+  // teardown can block the other. The attacker's matters most — it's the only Clerk identity,
+  // and resetDb()'s TRUNCATE cannot reclaim those.
   try {
-    const invoice = await testDb.invoice.create({ data: { userId: owner.userId, total: 500 } })
-
-    // Separate context so the attacker's cookies can never reuse the owner's session.
-    const ctx = await browser.newContext()
+    const attacker = await createTestUser()
     try {
-      const page = await ctx.newPage()
-      await signInAs(page, attacker)
+      const invoice = await testDb.invoice.create({ data: { userId: owner.userId, total: 500 } })
 
-      const res = await page.request.delete(`/api/invoices/${invoice.id}`)
-      expect(res.status()).toBe(404) // 404, never 403 — don't reveal existence
+      // Separate context so the attacker's cookies can never reuse the owner's session.
+      // Relative URLs still resolve here: browser.newContext() does inherit the config baseURL.
+      const ctx = await browser.newContext()
+      try {
+        const page = await ctx.newPage()
+        await signInAs(page, attacker)
+
+        const res = await page.request.delete(`/api/invoices/${invoice.id}`)
+        expect(res.status()).toBe(404) // 404, never 403 — don't reveal existence
+      } finally {
+        await ctx.close()
+      }
+
+      // Ground truth from Postgres: prove the response wasn't just lying about the side effect.
+      const after = await testDb.invoice.findUniqueOrThrow({ where: { id: invoice.id } })
+      expect(after.deletedAt).toBeNull()
     } finally {
-      await ctx.close()
+      await deleteTestUser(attacker.userId, attacker.clerkId)
     }
-
-    // Ground truth from Postgres: prove the response wasn't just lying about the side effect.
-    const after = await testDb.invoice.findUniqueOrThrow({ where: { id: invoice.id } })
-    expect(after.deletedAt).toBeNull()
   } finally {
-    await deleteTestUser(owner.userId, owner.clerkId)
-    await deleteTestUser(attacker.userId, attacker.clerkId)
+    await deleteTestDbUser(owner.userId)
   }
 })
 ```
@@ -329,7 +352,13 @@ test('user creates and sends an invoice', async ({ page }) => {
 - Use factories for test data — never hardcoded UUIDs or emails.
 - Tests must be idempotent: re-runnable in any order.
 - Integration tests use a dedicated test DB — never dev DB.
-- Mock only external services (email, Stripe, S3) — not your own modules.
+- Mock only external services (email, Stripe, S3) — not your own modules. **In integration and E2E
+  specs this is absolute**: they run against the real app over real HTTP against real Postgres, so
+  there is nothing of ours left to mock, and a mock there would hollow out the exact thing the spec
+  exists to prove. The one sanctioned exception lives in **vitest unit tests**: the narrow
+  hand-rolled `@/lib/db` fake described in Repo Reality above. It is only ever evidence about
+  *branch logic*, never about Postgres row-lock, advisory-lock, or transaction-isolation behaviour —
+  anything in that second category belongs in a DB-backed spec.
 
 ## Reporting Coverage You Couldn't Achieve
 The checklist below is the bar. When a box genuinely can't be ticked, the correct output is to
