@@ -33,6 +33,7 @@ model User {
   reportJobs          ReportJob[]
   expenses            Expense[]
   reportShares        ReportShare[]
+  incomeGoals         IncomeGoal[]
 
   @@index([clerkId])
 }
@@ -183,6 +184,58 @@ enum ExpenseCategory {
   PHONE_INTERNET
   HOME_OFFICE
   OTHER
+}
+
+// A user-set financial target behind the dashboard's "Goals" tab: a monthly income goal, plus the
+// two optional planning inputs the runway estimate needs. Like Expense, nothing here ever feeds the
+// verification pipeline — every figure derived from it is an informational planning estimate (see
+// lib/goal-calculators.ts), and the UI says so.
+//
+// Cardinality is one *active* goal per (userId, type), enforced by a real unique constraint rather
+// than app-level checking so two concurrent "set goal" requests can't race into duplicates. Clearing
+// a goal soft-deletes it (`deletedAt`, matching the schema-wide convention) and re-setting one
+// upserts the same row back to active — so the constraint stays a plain (non-partial) unique index,
+// which is the only kind Prisma can represent without schema drift.
+//
+// Amounts are Decimal (never Float) so cents never drift. `monthlyExpenses` and `cashOnHand` are
+// null until the user fills them in: the panel prefills monthlyExpenses from their real logged
+// expenses (lib/expense-calculators.ts) and only persists an explicit override here, and runway
+// months stay unavailable — never a fake 0 — until a cash-on-hand figure exists.
+model IncomeGoal {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  type IncomeGoalType
+
+  // For MONTHLY_TARGET (the only type the Goals panel writes today) this is the monthly income the
+  // user is aiming for. The other two enum values are reserved for the runway/savings goals the
+  // Goals issue anticipates; nothing writes them yet.
+  targetAmount Decimal @db.Decimal(10, 2)
+
+  // User's own override of their average monthly expenses. Null = "use my logged expenses".
+  monthlyExpenses Decimal? @db.Decimal(10, 2)
+  // Current cash buffer. Null = runway-in-months is simply not shown (the coverage ratio still is).
+  cashOnHand      Decimal? @db.Decimal(10, 2)
+
+  createdAt DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(3)
+  deletedAt DateTime? @db.Timestamptz(3)
+
+  // Serves the only list query: the caller's own active goals ({ userId, deletedAt: null }), read on
+  // every dashboard render. `deletedAt` sits in the key so the soft-delete filter is covered rather
+  // than applied as a post-scan filter.
+  @@index([userId, deletedAt])
+  // One goal row per user per type — see the cardinality note above.
+  @@unique([userId, type])
+}
+
+// The goal kinds the Goals tab can express. Enum (never a raw string) so the value set is fixed and
+// type-safe end to end; labels for display live in lib/goals.ts, never in the DB.
+enum IncomeGoalType {
+  MONTHLY_TARGET
+  RUNWAY_MONTHS
+  SAVINGS_TARGET
 }
 
 model ReportShare {

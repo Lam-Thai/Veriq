@@ -1,5 +1,6 @@
 "use client";
 
+import type { RefObject } from "react";
 import { cn } from "@/lib/cn";
 
 type CalcFieldProps = {
@@ -17,6 +18,10 @@ type CalcFieldProps = {
   hint?: string;
   /** id of a validation-error element to wire via aria-describedby; also flips aria-invalid on. */
   errorId?: string | undefined;
+  /** Handle on the underlying input, so a parent form can move focus to the first invalid field on a
+   *  failed submit (the a11y rule in the design-system skill). Optional — the read-only calculator
+   *  cards never validate, so they don't pass one. */
+  inputRef?: RefObject<HTMLInputElement | null> | undefined;
 };
 
 /**
@@ -38,6 +43,7 @@ export function CalcField({
   step,
   hint,
   errorId,
+  inputRef,
 }: CalcFieldProps) {
   return (
     <div>
@@ -53,6 +59,7 @@ export function CalcField({
         {prefix ? <span className="text-(length:--type-body-size) text-ink-muted-48">{prefix}</span> : null}
         <input
           id={id}
+          ref={inputRef}
           type="number"
           inputMode="decimal"
           min={min}

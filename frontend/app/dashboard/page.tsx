@@ -5,6 +5,7 @@ import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 import { OverviewPanel } from "@/components/dashboard/overview-panel";
 import { CalculatorsPanel } from "@/components/dashboard/calculators-panel";
 import { ExpensesPanel } from "@/components/dashboard/expenses-panel";
+import { GoalsPanel } from "@/components/dashboard/goals-panel";
 import { ReportPanel } from "@/components/dashboard/report-panel";
 import { SharingPanel } from "@/components/dashboard/sharing-panel";
 import { getUserConnections, computeDashboardStats } from "@/lib/dashboard-data";
@@ -12,6 +13,9 @@ import { listExpensesForUser, getExpenseSummaryForUser } from "@/lib/expense-dat
 import { computeExpenseSummary, type ExpenseSummary } from "@/lib/expense-calculators";
 import { computeIncomeProjection } from "@/lib/income-calculators";
 import { DEFAULT_PAGE_SIZE, type ExpenseDto } from "@/lib/expenses";
+import { getGoalForUser } from "@/lib/goal-data";
+import { averageMonthlyLoggedExpenses } from "@/lib/goal-calculators";
+import type { IncomeGoalDto } from "@/lib/goals";
 import {
   getInternalUserId,
   getLastReportValidUntil,
@@ -60,17 +64,21 @@ export default async function DashboardPage() {
   };
   // Shares are fetched alongside the expense queries rather than after them — they're independent,
   // so awaiting separately would add a serial DB round-trip to every dashboard render.
-  const [expensePage, expenseSummary, initialShares]: [
+  // The Goals tab's monthly-income goal joins the same batch — it's independent of the others, so
+  // awaiting it separately would add another serial round-trip to every dashboard render.
+  const [expensePage, expenseSummary, initialShares, incomeGoal]: [
     { expenses: ExpenseDto[]; nextCursor: string | null },
     ExpenseSummary,
     ReportShareDto[],
+    IncomeGoalDto | null,
   ] = internalUserId
     ? await Promise.all([
         listExpensesForUser(internalUserId, { limit: DEFAULT_PAGE_SIZE }),
         getExpenseSummaryForUser(internalUserId, expenseIncomeContext),
         listSharesForUser(internalUserId),
+        getGoalForUser(internalUserId, "MONTHLY_TARGET"),
       ])
-    : [{ expenses: [], nextCursor: null }, computeExpenseSummary([], expenseIncomeContext), []];
+    : [{ expenses: [], nextCursor: null }, computeExpenseSummary([], expenseIncomeContext), [], null];
 
   // Sharing tab: new links always point at the most recent READY report job. reportHistory is
   // already newest-first (getReportHistoryForUser), so the first READY entry is it — no separate
@@ -96,6 +104,15 @@ export default async function DashboardPage() {
             />
           }
           calculators={<CalculatorsPanel stats={stats} connections={connections} />}
+          goals={
+            <GoalsPanel
+              goal={incomeGoal}
+              monthlyBreakdown={stats.monthlyBreakdown}
+              averageMonthly={stats.averageMonthly}
+              hasVerifiedIncome={stats.totalVerified > 0}
+              loggedMonthlyExpenses={averageMonthlyLoggedExpenses(expenseSummary)}
+            />
+          }
           expenses={
             <ExpensesPanel
               initialExpenses={expensePage.expenses}
