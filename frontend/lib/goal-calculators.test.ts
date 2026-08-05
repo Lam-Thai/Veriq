@@ -117,6 +117,21 @@ describe("computeRunway", () => {
     expect(noExpenses.runwayMonths).toBeNull();
   });
 
+  it("treats a stored $0 expense override as no override, falling back to logged expenses", () => {
+    // Only a *positive* override displaces the logged figure — $0 monthly expenses would make the
+    // coverage ratio infinite, so it's read as "unset" rather than as a real cost of living.
+    const runway = computeRunway({
+      averageMonthlyIncome: 3000,
+      monthlyExpensesOverride: 0,
+      loggedMonthlyExpenses: 1500,
+      cashOnHand: 3000,
+    });
+
+    expect(runway.monthlyExpenses).toBe(1500);
+    expect(runway.expensesSource).toBe("logged");
+    expect(runway.runwayMonths).toBeCloseTo(2);
+  });
+
   it("treats a stated $0 buffer as a real answer of zero months", () => {
     const runway = computeRunway({
       averageMonthlyIncome: 3000,

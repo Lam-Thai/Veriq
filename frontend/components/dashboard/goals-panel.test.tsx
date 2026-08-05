@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import type { ComponentProps } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -34,7 +35,7 @@ const BREAKDOWN = [
   { month: "Jun", amount: 4200 },
 ];
 
-function renderPanel(props: Partial<React.ComponentProps<typeof GoalsPanel>> = {}) {
+function renderPanel(props: Partial<ComponentProps<typeof GoalsPanel>> = {}) {
   return render(
     <GoalsPanel
       goal={null}
@@ -190,6 +191,21 @@ describe("GoalsPanel — clearing", () => {
 
     await waitFor(() => expect(screen.queryByRole("heading", { name: "Set a monthly income goal" })).toBeTruthy());
     expect(fetchMock).toHaveBeenCalledWith("/api/goals/goal-1", { method: "DELETE" });
+  });
+
+  it("disarms a pending clear when the edit form is opened, so cancelling can't restore it", async () => {
+    const user = userEvent.setup();
+    renderPanel({ goal: makeGoal() });
+
+    await user.click(screen.getByRole("button", { name: "Clear goal" }));
+    expect(screen.queryByRole("button", { name: "Confirm clear" })).toBeTruthy();
+
+    // Opening the form hides the clear controls; cancelling must not bring back an armed confirm.
+    await user.click(screen.getByRole("button", { name: "Edit goal" }));
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+
+    expect(screen.queryByRole("button", { name: "Confirm clear" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Clear goal" })).toBeTruthy();
   });
 
   it("surfaces a server error without dropping the goal from the view", async () => {

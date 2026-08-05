@@ -50,6 +50,22 @@ function toFieldValue(amount: number | null): string {
 }
 
 /**
+ * Narrows a `{ data }` success envelope to a goal before the panel trusts it — the mirror image of
+ * lib/error-envelope.ts's isErrorEnvelope, checking the two fields every render path depends on.
+ */
+function isGoalEnvelope(value: unknown): value is { data: IncomeGoalDto } {
+  if (typeof value !== "object" || value === null || !("data" in value)) return false;
+  const { data } = value as { data: unknown };
+  if (typeof data !== "object" || data === null) return false;
+  return (
+    "id" in data &&
+    typeof (data as { id: unknown }).id === "string" &&
+    "targetAmount" in data &&
+    typeof (data as { targetAmount: unknown }).targetAmount === "number"
+  );
+}
+
+/**
  * "Goals" tab body — set a monthly income goal, then see how the current verified month tracks
  * against it, how long a cash buffer would cover expenses, and which months hit the goal.
  *
@@ -120,6 +136,11 @@ export function GoalsPanel({
     setTargetError(null);
     setFormError(null);
     setStatus("idle");
+    // Opening the form hides the clear controls, so disarm them here too — otherwise cancelling the
+    // form would put a still-armed "Confirm clear" (and any stale clear error) back on screen, one
+    // click from a destructive action the user had visually moved on from.
+    setConfirmingClear(false);
+    setClearError(null);
     setFormOpen(true);
   }
 
@@ -166,7 +187,16 @@ export function GoalsPanel({
         return;
       }
 
-      setGoal((body as { data: IncomeGoalDto }).data);
+      // A 2xx with a body we can't read as a goal is still a failure from the user's point of view.
+      // Without this check the bare cast would hand `undefined` to setGoal and silently drop the
+      // panel back to its empty state even though the write succeeded.
+      if (!isGoalEnvelope(body)) {
+        setFormError("Couldn't save your goal.");
+        setStatus("error");
+        return;
+      }
+
+      setGoal(body.data);
       setFormOpen(false);
       setStatus("idle");
       setAnnouncement("Goal saved");
@@ -228,40 +258,52 @@ export function GoalsPanel({
     />
   ) : null;
 
+  // One live region for the whole panel, held at a stable position in both branches' root fragment
+  // so React reuses the same node rather than remounting it. Saving or clearing a goal swaps which
+  // branch renders, and a live region that mounts with its text already set is generally not
+  // announced at all — the region has to outlive the swap for the announcement to land.
+  const liveRegion = (
+    <p aria-live="polite" role="status" className="sr-only">
+      {announcement}
+    </p>
+  );
+
   // Empty state: no goal yet. An invitation to act, not a blank screen. The dip alert still belongs
   // here — computeDipAlert's trailing-average branch doesn't need a goal, so a user whose income
   // just fell off a cliff gets told about it whether or not they've set a target.
   if (!goal) {
     return (
-      <div className="flex flex-col gap-4">
-        <p aria-live="polite" role="status" className="sr-only">
-          {announcement}
-        </p>
-        {dip ? <DipAlertCard dip={dip} /> : null}
-        {formOpen ? (
-          goalForm
-        ) : (
-          <Card className="mx-auto max-w-md text-center">
-            <h2 className="text-(length:--type-tagline-size)/(--type-tagline-lh) font-semibold text-ink">
-              Set a monthly income goal
-            </h2>
-            <p className="mt-2 text-(length:--type-body-size)/(--type-body-lh) text-ink-muted-80">
-              Pick the amount you&rsquo;re aiming to earn each month. We&rsquo;ll show how your verified income tracks
-              against it, and how long your savings would cover your costs if work slowed down.
-            </p>
-            <div className="mt-5 flex justify-center">
-              <PillButton type="button" variant="primary" size="compact" onClick={openForm}>
-                Set your goal
-              </PillButton>
-            </div>
-          </Card>
-        )}
-      </div>
+      <>
+        {liveRegion}
+        <div className="flex flex-col gap-4">
+          {dip ? <DipAlertCard dip={dip} /> : null}
+          {formOpen ? (
+            goalForm
+          ) : (
+            <Card className="mx-auto max-w-md text-center">
+              <h2 className="text-(length:--type-tagline-size)/(--type-tagline-lh) font-semibold text-ink">
+                Set a monthly income goal
+              </h2>
+              <p className="mt-2 text-(length:--type-body-size)/(--type-body-lh) text-ink-muted-80">
+                Pick the amount you&rsquo;re aiming to earn each month. We&rsquo;ll show how your verified income
+                tracks against it, and how long your savings would cover your costs if work slowed down.
+              </p>
+              <div className="mt-5 flex justify-center">
+                <PillButton type="button" variant="primary" size="compact" onClick={openForm}>
+                  Set your goal
+                </PillButton>
+              </div>
+            </Card>
+          )}
+        </div>
+      </>
     );
   }
 
   return (
-    <div className="flex flex-col gap-6">
+    <>
+      {liveRegion}
+      <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-(length:--type-tagline-size)/(--type-tagline-lh) font-semibold text-ink">Goals</h2>
@@ -324,10 +366,6 @@ export function GoalsPanel({
         ) : null}
       </div>
 
-      <p aria-live="polite" role="status" className="sr-only">
-        {announcement}
-      </p>
-
       {clearError ? (
         <p role="alert" className="text-(length:--type-caption-size) text-danger">
           {clearError}
@@ -374,7 +412,8 @@ export function GoalsPanel({
         These are planning estimates built from your verified income and the figures you entered — not a prediction of
         what you&rsquo;ll earn, a guarantee, or financial advice.
       </p>
-    </div>
+      </div>
+    </>
   );
 }
 

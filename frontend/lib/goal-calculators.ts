@@ -55,6 +55,10 @@ export type GoalProgress = {
  * Measures the most recent verified month against the goal. Returns `null` when there's no usable
  * target (a non-positive goal can't be a denominator) or no monthly data at all — callers render an
  * empty state rather than a zeroed-out one, matching how the Calculators cards behave.
+ *
+ * ORDERING CONTRACT: `monthlyBreakdown` must be oldest-first (ascending by month). The last element
+ * is taken as the current month. That's how lib/dashboard-data.ts builds it; a descending array
+ * would silently measure the *oldest* month against the goal rather than erroring.
  */
 export function computeGoalProgress(target: number, monthlyBreakdown: MonthlyAmount[]): GoalProgress | null {
   const latest = monthlyBreakdown.at(-1);
@@ -223,6 +227,10 @@ export type DipAlert = {
  * `target` may be null (a user can get dip alerts without having set a goal). The trailing-average
  * branch needs at least one prior month with a positive average; see the file-header caveat about
  * why it can't fire on today's synthetic curve.
+ *
+ * ORDERING CONTRACT: `monthlyBreakdown` must be oldest-first (ascending by month) — the last element
+ * is the month under test and everything before it forms the trailing average. Passing a descending
+ * array inverts both, comparing the oldest month against an average of newer ones.
  */
 export function computeDipAlert(target: number | null, monthlyBreakdown: MonthlyAmount[]): DipAlert | null {
   const latest = monthlyBreakdown.at(-1);
