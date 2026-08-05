@@ -3,13 +3,14 @@
 import { useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { cn } from "@/lib/cn";
 
-const SECTIONS = ["Overview", "Calculators", "Expenses", "Report", "Sharing", "Account"] as const;
+const SECTIONS = ["Overview", "Calculators", "Goals", "Expenses", "Report", "Sharing", "Account"] as const;
 
 type Section = (typeof SECTIONS)[number];
 
 type DashboardShellProps = {
   overview: ReactNode;
   calculators: ReactNode;
+  goals: ReactNode;
   expenses: ReactNode;
   report: ReactNode;
   sharing: ReactNode;
@@ -19,6 +20,7 @@ type DashboardShellProps = {
 const PANEL_BY_SECTION: Record<Section, keyof DashboardShellProps> = {
   Overview: "overview",
   Calculators: "calculators",
+  Goals: "goals",
   Expenses: "expenses",
   Report: "report",
   Sharing: "sharing",
@@ -35,11 +37,20 @@ function tabId(section: Section): string {
   return `dashboard-tab-${PANEL_BY_SECTION[section]}`;
 }
 
-export function DashboardShell({ overview, calculators, expenses, report, sharing, account }: DashboardShellProps) {
+export function DashboardShell({
+  overview,
+  calculators,
+  goals,
+  expenses,
+  report,
+  sharing,
+  account,
+}: DashboardShellProps) {
   const [activeSection, setActiveSection] = useState<Section>("Overview");
   const panels: Record<Section, ReactNode> = {
     Overview: overview,
     Calculators: calculators,
+    Goals: goals,
     Expenses: expenses,
     Report: report,
     Sharing: sharing,
