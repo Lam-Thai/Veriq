@@ -203,75 +203,82 @@ export function ContactForm({ signedIn, configured, defaultName, defaultEmail }:
   }
 
   return (
-    <form onSubmit={handleSubmit} noValidate className="mx-auto flex max-w-text flex-col gap-4">
-      <Field
-        id={FIELD_INPUT_IDS.name}
-        label="Your name"
-        value={name}
-        onChange={setName}
-        maxLength={MAX_NAME_LENGTH}
-        autoComplete="name"
-        errors={fieldErrors.name}
-      />
-      <Field
-        id={FIELD_INPUT_IDS.email}
-        label="Your email"
-        type="email"
-        value={email}
-        onChange={setEmail}
-        maxLength={MAX_EMAIL_LENGTH}
-        autoComplete="email"
-        errors={fieldErrors.email}
-      />
-      <Field
-        id={FIELD_INPUT_IDS.subject}
-        label="Subject"
-        value={subject}
-        onChange={setSubject}
-        maxLength={MAX_SUBJECT_LENGTH}
-        placeholder="e.g. My Uber connection isn't showing up"
-        errors={fieldErrors.subject}
-      />
-      <Field
-        id={FIELD_INPUT_IDS.message}
-        label="Message"
-        value={message}
-        onChange={setMessage}
-        maxLength={MAX_MESSAGE_LENGTH}
-        multiline
-        placeholder="Tell us what happened and what you expected instead."
-        errors={fieldErrors.message}
-      />
-
-      {/* Honeypot — see HONEYPOT_FIELD in lib/contact.ts. Rendered, focusable-skipping, and hidden
-          from assistive tech, so no human ever fills it; a value here means an automated
-          submitter and the server silently drops the message. `sr-only` rather than
-          `display: none`, since some bots skip undisplayed inputs. */}
-      <div className="sr-only" aria-hidden="true">
-        <label htmlFor={`contact-${HONEYPOT_FIELD}`}>Company (leave this field empty)</label>
-        <input
-          id={`contact-${HONEYPOT_FIELD}`}
-          name={HONEYPOT_FIELD}
-          type="text"
-          value={honeypot}
-          onChange={(event) => setHoneypot(event.target.value)}
-          tabIndex={-1}
-          autoComplete="off"
+    // Panelled rather than flush against the page, so the form reads as its own object — the same
+    // flat hairline-on-canvas treatment as `Card`, which the three states above already use, but
+    // hand-rolled here instead of reusing that component: `Card` is an `<article>` that lifts on
+    // hover, and a form panel is neither an article nor something that should move under the
+    // cursor while you're typing in it.
+    <div className="mx-auto max-w-text rounded-lg border border-hairline bg-canvas p-6">
+      <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
+        <Field
+          id={FIELD_INPUT_IDS.name}
+          label="Your name"
+          value={name}
+          onChange={setName}
+          maxLength={MAX_NAME_LENGTH}
+          autoComplete="name"
+          errors={fieldErrors.name}
         />
-      </div>
+        <Field
+          id={FIELD_INPUT_IDS.email}
+          label="Your email"
+          type="email"
+          value={email}
+          onChange={setEmail}
+          maxLength={MAX_EMAIL_LENGTH}
+          autoComplete="email"
+          errors={fieldErrors.email}
+        />
+        <Field
+          id={FIELD_INPUT_IDS.subject}
+          label="Subject"
+          value={subject}
+          onChange={setSubject}
+          maxLength={MAX_SUBJECT_LENGTH}
+          placeholder="e.g. My Uber connection isn't showing up"
+          errors={fieldErrors.subject}
+        />
+        <Field
+          id={FIELD_INPUT_IDS.message}
+          label="Message"
+          value={message}
+          onChange={setMessage}
+          maxLength={MAX_MESSAGE_LENGTH}
+          multiline
+          placeholder="Tell us what happened and what you expected instead."
+          errors={fieldErrors.message}
+        />
 
-      {generalError ? (
-        <p role="alert" className="text-(length:--type-caption-size) text-danger">
-          {generalError}
-        </p>
-      ) : null}
+        {/* Honeypot — see HONEYPOT_FIELD in lib/contact.ts. Rendered, focusable-skipping, and
+            hidden from assistive tech, so no human ever fills it; a value here means an automated
+            submitter and the server silently drops the message. `sr-only` rather than
+            `display: none`, since some bots skip undisplayed inputs. */}
+        <div className="sr-only" aria-hidden="true">
+          <label htmlFor={`contact-${HONEYPOT_FIELD}`}>Company (leave this field empty)</label>
+          <input
+            id={`contact-${HONEYPOT_FIELD}`}
+            name={HONEYPOT_FIELD}
+            type="text"
+            value={honeypot}
+            onChange={(event) => setHoneypot(event.target.value)}
+            tabIndex={-1}
+            autoComplete="off"
+          />
+        </div>
 
-      <div className="flex items-center justify-end">
-        <PillButton type="submit" variant="primary" size="compact" disabled={submitting} aria-busy={submitting}>
-          {submitting ? "Sending…" : "Send message"}
-        </PillButton>
-      </div>
-    </form>
+        {generalError ? (
+          <p role="alert" className="text-(length:--type-caption-size) text-danger">
+            {generalError}
+          </p>
+        ) : null}
+
+        <div className="mt-1 flex items-center justify-end">
+          <PillButton type="submit" variant="primary" size="compact" disabled={submitting} aria-busy={submitting}>
+            {submitting ? "Sending…" : "Send message"}
+          </PillButton>
+        </div>
+      </form>
+    </div>
   );
 }
 
@@ -317,7 +324,10 @@ function Field({
       </label>
       <div
         className={cn(
-          "mt-1 flex items-center gap-2 rounded-lg border bg-canvas px-3 py-2",
+          // `bg-surface-pearl`, not the `bg-canvas` the dialog's fields use: this form sits inside
+          // a canvas-coloured panel, so canvas fields would be invisible against it. Pearl is one
+          // step off canvas in both themes, which reads as a recessed input rather than a tint.
+          "mt-1 flex items-center gap-2 rounded-lg border bg-surface-pearl px-3 py-2",
           "focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-primary-focus",
           hasError ? "border-danger" : "border-hairline",
         )}

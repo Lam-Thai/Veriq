@@ -1,7 +1,10 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
+import Link from "next/link";
 import { currentUser } from "@clerk/nextjs/server";
+import { cn } from "@/lib/cn";
 import { Card } from "@/components/ui/card";
+import { ArrowLeftIcon } from "@/components/ui/icons";
 import { Disclosure } from "@/components/ui/disclosure";
 import { SectionEyebrow } from "@/components/ui/section-eyebrow";
 import { HelpHeader } from "@/components/help/help-header";
@@ -37,6 +40,28 @@ export default async function HelpPage() {
           rectangles held together by a hairline. */}
       <main className="bg-canvas-parchment px-6 py-(--spacing-section)">
         <div className="mx-auto max-w-text">
+          {/* Signed-in only: "back to dashboard" is a dead end for a visitor who doesn't have one
+              yet — proxy.ts would bounce them to /sign-in. Signed-out readers reach this page from
+              the marketing site and have the header's sign-in link instead. */}
+          {user ? (
+            <Link
+              href="/dashboard"
+              className={cn(
+                "group mb-6 inline-flex items-center gap-2 rounded-xs text-(length:--type-caption-size) font-semibold text-ink-muted-80",
+                "transition-colors duration-(--duration-fast) ease-(--ease-out) hover:text-ink",
+                "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-focus",
+              )}
+            >
+              <ArrowLeftIcon
+                className={cn(
+                  "h-4 w-4 transition-transform duration-(--duration-fast) ease-(--ease-out)",
+                  "group-hover:-translate-x-0.5 motion-reduce:transition-none motion-reduce:group-hover:translate-x-0",
+                )}
+              />
+              Back to dashboard
+            </Link>
+          ) : null}
+
           <SectionEyebrow>Help &amp; support</SectionEyebrow>
           <h1 className="mt-3 text-(length:--type-display-lg-size)/(--type-display-lg-lh) tracking-(--type-display-lg-ls) font-semibold text-ink">
             How Veriq works
