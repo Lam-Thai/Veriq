@@ -58,6 +58,14 @@ const EnvSchema = z.object({
   // have configured in most environments, so lib/email.ts falls back to a placeholder sender
   // address rather than requiring this too.
   RESEND_FROM_EMAIL: z.string().email().optional(),
+  // Inbox the /help contact form delivers to (lib/email.ts's sendContactEmail). Optional for the
+  // same reason as RESEND_API_KEY above, and load-bearing in the same way: with either one unset
+  // there is nowhere to deliver to, so app/api/contact/route.ts reports the feature as
+  // unconfigured and components/help/contact-form.tsx degrades to a "email us directly" notice
+  // instead of a form that silently swallows messages. Never exposed client-side — the form
+  // learns *that* contact is unavailable from a server-rendered boolean, never the address
+  // itself, so this can't be scraped off the help page by address harvesters.
+  CONTACT_FORM_TO: z.string().email().optional(),
   // Salt mixed into the coarsened-IP hash on a report share's view log (lib/ip-privacy.ts) —
   // `min(16)` so a trivially short/guessable value can't be configured. Never logged.
   //
@@ -100,6 +108,7 @@ const BUILD_PLACEHOLDERS: Record<keyof z.infer<typeof EnvSchema>, string> = {
   NEXT_PUBLIC_SENTRY_DSN: "build-placeholder-dsn",
   RESEND_API_KEY: "resend-buildplaceholder",
   RESEND_FROM_EMAIL: "build-placeholder@example.com",
+  CONTACT_FORM_TO: "build-placeholder@example.com",
   REPORT_SHARE_IP_SALT: "build-placeholder-salt-16-chars",
 };
 
