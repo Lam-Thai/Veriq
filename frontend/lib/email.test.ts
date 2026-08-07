@@ -91,10 +91,24 @@ describe("sendContactEmail / isContactEmailConfigured", () => {
     mockLogger.error.mockReset();
     mockLogger.info.mockReset();
     mockSend.mockReset();
+    // Resend resolves with `{ data, error }` on success — the default has to match that shape,
+    // since sendContactEmail reads `error` off the resolved value.
+    mockSend.mockResolvedValue({ data: { id: "email_1" }, error: null });
   });
 
-  it("reports unconfigured when either half of the config is missing", async () => {
+  it("reports unconfigured when the destination is missing", async () => {
     mockEnv.RESEND_API_KEY = "re_test_key"; // key set, destination not
+    const { isContactEmailConfigured, sendContactEmail } = await import("@/lib/email");
+
+    expect(isContactEmailConfigured()).toBe(false);
+    await expect(sendContactEmail(params)).resolves.toEqual({ ok: false, reason: "unconfigured" });
+    expect(mockSend).not.toHaveBeenCalled();
+  });
+
+  // The mirror image of the case above. The `resend` client is built at module scope, so the
+  // missing key has to be in place *before* the import for the null-client path to be exercised.
+  it("reports unconfigured when the API key is missing", async () => {
+    mockEnv.CONTACT_FORM_TO = "support@example.com"; // destination set, key not
     const { isContactEmailConfigured, sendContactEmail } = await import("@/lib/email");
 
     expect(isContactEmailConfigured()).toBe(false);
@@ -144,6 +158,20 @@ describe("sendContactEmail / isContactEmailConfigured", () => {
 
     await expect(sendContactEmail(params)).resolves.toEqual({ ok: false, reason: "send-failed" });
     expect(mockLogger.error).toHaveBeenCalledTimes(1);
+    expect(JSON.stringify(mockLogger.error.mock.calls[0])).not.toContain(params.message);
+  });
+
+  // Resend reports API-level failures by *resolving* with an `error`, not by rejecting — a send
+  // that never reached the inbox must not be reported as ok.
+  it("returns a typed failure when Resend resolves with an error instead of rejecting", async () => {
+    mockEnv.RESEND_API_KEY = "re_test_key";
+    mockEnv.CONTACT_FORM_TO = "support@example.com";
+    mockSend.mockResolvedValueOnce({ data: null, error: { name: "validation_error", message: "domain not verified" } });
+    const { sendContactEmail } = await import("@/lib/email");
+
+    await expect(sendContactEmail(params)).resolves.toEqual({ ok: false, reason: "send-failed" });
+    expect(mockLogger.error).toHaveBeenCalledTimes(1);
+    expect(mockLogger.info).not.toHaveBeenCalled();
     expect(JSON.stringify(mockLogger.error.mock.calls[0])).not.toContain(params.message);
   });
 });

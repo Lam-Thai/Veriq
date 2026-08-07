@@ -109,13 +109,20 @@ export async function sendContactEmail(params: ContactEmailParams): Promise<Cont
   ].join("\n");
 
   try {
-    await resend.emails.send({
+    // Resend's SDK resolves with `{ data, error }` rather than rejecting on an API-level failure
+    // (rejected domain, invalid recipient, quota), so the resolved `error` has to be inspected —
+    // awaiting alone would report a message that was never delivered as `ok: true`.
+    const { error } = await resend.emails.send({
       from: env.RESEND_FROM_EMAIL ?? DEFAULT_FROM,
       to: env.CONTACT_FORM_TO,
       replyTo: params.verifiedEmail,
       subject: `[Veriq help] ${safeSubject}`,
       text: body,
     });
+    if (error) {
+      log.error({ err: error, clerkUserId: params.clerkUserId }, "[email] contact send failed");
+      return { ok: false, reason: "send-failed" };
+    }
     // No message content, no email addresses — this is user-submitted PII and stays out of logs
     // per the error-handling skill's log rules. The Clerk id is enough to correlate a report.
     log.info({ clerkUserId: params.clerkUserId }, "[email] contact message sent");
