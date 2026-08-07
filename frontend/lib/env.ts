@@ -58,6 +58,14 @@ const EnvSchema = z.object({
   // have configured in most environments, so lib/email.ts falls back to a placeholder sender
   // address rather than requiring this too.
   RESEND_FROM_EMAIL: z.string().email().optional(),
+  // Inbox the /help contact form delivers to (lib/email.ts's sendContactEmail). Optional for the
+  // same reason as RESEND_API_KEY above, and load-bearing in the same way: with either one unset
+  // there is nowhere to deliver to, so app/api/contact/route.ts reports the feature as
+  // unconfigured and components/help/contact-form.tsx degrades to a "email us directly" notice
+  // instead of a form that silently swallows messages. Never exposed client-side — the form
+  // learns *that* contact is unavailable from a server-rendered boolean, never the address
+  // itself, so this can't be scraped off the help page by address harvesters.
+  CONTACT_FORM_TO: z.email().optional(),
   // Salt mixed into the coarsened-IP hash on a report share's view log (lib/ip-privacy.ts) —
   // `min(16)` so a trivially short/guessable value can't be configured. Never logged.
   //
@@ -85,7 +93,12 @@ const isProductionBuildPhase = process.env.NEXT_PHASE === "phase-production-buil
 // URL, an `sk_`-prefixed string, ...) so a module-scope client construction doesn't throw during
 // static analysis. Real values always win when present; this only fills in what's genuinely
 // missing, and only during the build phase.
-const BUILD_PLACEHOLDERS: Record<keyof z.infer<typeof EnvSchema>, string> = {
+//
+// Deliberately partial: CONTACT_FORM_TO has no placeholder. A placeholder there would make
+// `isContactEmailConfigured()` (lib/email.ts) report the /help contact form as live during the
+// build phase, so a prerendered help page would ship a form pointing at a fake inbox. The
+// recipient must be configured explicitly for the feature to turn on, in every phase.
+const BUILD_PLACEHOLDERS: Partial<Record<keyof z.infer<typeof EnvSchema>, string>> = {
   DATABASE_URL: "postgresql://placeholder@localhost/build-placeholder",
   DIRECT_URL: "postgresql://placeholder@localhost/build-placeholder",
   STRIPE_SECRET_KEY: "sk_test_buildplaceholder",
@@ -120,12 +133,12 @@ function loadEnv(): z.infer<typeof EnvSchema> {
       "validate strictly and fail loudly if truly misconfigured.",
   );
 
-  const merged = Object.fromEntries(
-    (Object.keys(BUILD_PLACEHOLDERS) as Array<keyof typeof BUILD_PLACEHOLDERS>).map((key) => [
-      key,
-      process.env[key] ?? BUILD_PLACEHOLDERS[key],
-    ]),
-  );
+  // Start from the real environment (so keys without a placeholder — CONTACT_FORM_TO — still come
+  // through when they *are* configured) and fill in only what's genuinely missing.
+  const merged: Record<string, string | undefined> = { ...process.env };
+  for (const [key, placeholder] of Object.entries(BUILD_PLACEHOLDERS)) {
+    merged[key] ??= placeholder;
+  }
   return EnvSchema.parse(merged);
 }
 
